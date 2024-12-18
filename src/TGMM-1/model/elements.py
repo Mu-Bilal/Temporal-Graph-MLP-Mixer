@@ -15,7 +15,7 @@ class MLP(nn.Module):
                                                bias=True if (i == nlayer-1 and not with_final_activation and bias)
                                                or (not with_norm) else False)  # set bias=False for BN
                                      for i in range(nlayer)])
-        self.norms = nn.ModuleList([nn.BatchNorm1d(n_hid if i < nlayer-1 else nout) if with_norm else nn.Identity()
+        self.norms = nn.ModuleList([nn.LayerNorm(n_hid if i < nlayer-1 else nout) if with_norm else nn.Identity()
                                     for i in range(nlayer)])
         self.nlayer = nlayer
         self.with_final_activation = with_final_activation

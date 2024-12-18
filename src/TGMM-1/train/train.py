@@ -3,19 +3,21 @@ import os
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from torch_geometric.loader import DataLoader
 from omegaconf import OmegaConf
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from model.dataset import create_dataset
+from model.dataset import create_dataloaders
 from model.model import GMMModel
+
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def create_model(cfg):  # TODO: Put into GMMModel
-    assert cfg.dataset == 'ZINC'
-    nfeat_node = 28
-    nfeat_edge = 4
+    assert cfg.dataset == 'METRLA'
+    nfeat_node = 1
+    nfeat_edge = 1
     nout = 1  # regression
 
     assert cfg.metis.n_patches > 0
@@ -38,10 +40,7 @@ def create_model(cfg):  # TODO: Put into GMMModel
 
 def train_model(cfg):
     # Create dataloaders
-    train_dataset, val_dataset, test_dataset = create_dataset(cfg)
-    train_loader = DataLoader(train_dataset, cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    val_loader = DataLoader(val_dataset, cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
-    # test_loader = DataLoader(test_dataset, cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    train_loader, val_loader, test_loader = create_dataloaders(cfg, 'METRLA', max_len=100)
     
     # Create model
     model = create_model(cfg)
@@ -52,7 +51,7 @@ def train_model(cfg):
         project='GMM-1',
         entity='Temporal-GMM'
     )
-    
+
     trainer = pl.Trainer(
         max_epochs=cfg.train.epochs,
         accelerator='gpu' if torch.cuda.is_available() else 'cpu',
@@ -68,6 +67,6 @@ def train_model(cfg):
     )
 
 if __name__ == '__main__':
-    cfg = OmegaConf.load('/Users/luis/Desktop/ETH/Courses/AS24-DL/Project/Temporal-Graph-MLP-Mixer/src/GMM/model/config.yaml')
-    cfg = OmegaConf.merge(cfg, OmegaConf.load('/Users/luis/Desktop/ETH/Courses/AS24-DL/Project/Temporal-Graph-MLP-Mixer/src/GMM/train/zinc.yaml'))
+    cfg = OmegaConf.load('/Users/luis/Desktop/ETH/Courses/AS24-DL/Project/Temporal-Graph-MLP-Mixer/src/TGMM-1/model/config.yaml')
+    cfg = OmegaConf.merge(cfg, OmegaConf.load('/Users/luis/Desktop/ETH/Courses/AS24-DL/Project/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/metrla.yaml'))
     train_model(cfg)

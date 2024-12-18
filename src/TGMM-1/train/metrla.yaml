@@ -1,4 +1,4 @@
-dataset: ZINC
+dataset: METRLA
 num_workers: 8
 model:
   gMHA_type: MLPMixer

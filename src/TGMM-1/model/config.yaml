@@ -23,7 +23,7 @@ train:
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options
   gMHA_type: MLPMixer  # GraphMLPMixer or graph-based multihead attention: [MLPMixer, Hadamard, Standard, Graph, Addictive, Kernel]
-  hidden_size: 128  # Hidden size of the model
+  hidden_size: 16  # Hidden size of the model
   nlayer_gnn: 4  # Number of gnn layers
   nlayer_mlpmixer: 4  # Number of mlp mixer layers
   pool: mean  # Pooling type for generaating graph/subgraph embedding from node embeddings

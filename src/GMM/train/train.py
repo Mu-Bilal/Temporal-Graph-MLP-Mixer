@@ -40,6 +40,7 @@ def train_model(cfg):
     # Create dataloaders
     train_dataset, val_dataset, test_dataset = create_dataset(cfg)
     train_loader = DataLoader(train_dataset, cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers)
+    
     val_loader = DataLoader(val_dataset, cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
     # test_loader = DataLoader(test_dataset, cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
     
