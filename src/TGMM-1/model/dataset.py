@@ -10,81 +10,10 @@ from torch_geometric.loader import DataLoader
 from tqdm import trange
 from omegaconf import OmegaConf
 from torch_geometric_temporal.dataset import METRLADatasetLoader
+from typing import Iterable
 
 from model.transform import GraphPartitionTransform, PositionalEncodingTransform
 
-
-class CustomTemporalData(object):
-    """
-    Wraps each batch in PyG-Temporal Data object to same fields as PyG Data object (as required by GMM transforms).
-    """
-    def __init__(self, edge_index, edge_weight, num_nodes, features, targets):
-        self.edge_index = edge_index
-        self.edge_weight = edge_weight
-        self.edge_attr = edge_weight
-        self.num_nodes = num_nodes
-        self.features = features
-        self.targets = targets
-
-    def __str__(self):
-        return (f"CustomTemporalData(\n"
-                f"  num_nodes: {self.num_nodes}\n"
-                f"  edge_index: {tuple(self.edge_index.shape)}\n" 
-                f"  edge_weight: {tuple(self.edge_weight.shape)}\n"
-                f"  edge_attr: {tuple(self.edge_attr.shape)}\n"
-                f"  features: {tuple(self.features.shape)}\n"
-                f"  targets: {tuple(self.targets.shape)}\n"
-                f")")
-    
-    def __repr__(self):
-        return self.__str__()
-
-
-class CustomTemporalDataset(Dataset):
-    def __init__(
-            self, 
-            dataset: tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal, 
-            transform = None,
-            pre_transform = None,
-            max_len = None
-            ):
-        self.data = self.wrap_temporal_data(dataset)
-        if max_len:
-            self.data = self.data[:max_len]
-        self.pre_transform = pre_transform
-        self.transform = transform
-        if self.pre_transform:
-            self.data = [self.pre_transform(self.data[i]) for i in trange(len(self.data), desc="Pre-transforming data")]
-
-    def wrap_temporal_data(self, dataset: tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal):
-        assert isinstance(dataset, tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal)
-
-        # Static graph data
-        edge_index = torch.tensor(dataset.edge_index, dtype=torch.long)
-        edge_attr = torch.tensor(dataset.edge_weight, dtype=torch.float32)
-        num_nodes = dataset.features[0].shape[0]
-
-        # Dynamic temporal data
-        data_list = []
-        for i in range(dataset.snapshot_count):
-            x = torch.tensor(dataset.features[i][:, 0, :], dtype=torch.float32)  # Node features
-            y = torch.tensor(dataset.targets[i], dtype=torch.float32)  # Target
-            
-            data_list.append(CustomTemporalData(edge_index, edge_attr, num_nodes, x, y))
-
-        return data_list
-
-    def __getitem__(self, idx):
-        data = self.data[idx]
-        if self.transform:
-            if isinstance(data, list):
-                data = [self.transform(data[i]) for i in trange(len(data), desc="Transforming data")]
-            else:
-                data = self.transform(data)
-        return data
-
-    def __len__(self):
-        return len(self.data)
 
 class PlanarSATPairsDataset(InMemoryDataset):
     """
@@ -184,6 +113,81 @@ def create_train_val_test_split(dataset, max_len: int = None):
     return train_data, val_data, test_data
 
 
+class CustomTemporalData(object):
+    """
+    Wraps each batch in PyG-Temporal Data object to same fields as PyG Data object (as required by GMM transforms).
+    """
+    def __init__(self, edge_index, edge_weight, num_nodes, features, targets):
+        self.edge_index = edge_index
+        self.edge_weight = edge_weight
+        self.edge_attr = edge_weight
+        self.num_nodes = num_nodes
+        self.features = features
+        self.targets = targets
+
+    def __str__(self):
+        return (f"CustomTemporalData(\n"
+                f"  num_nodes: {self.num_nodes}\n"
+                f"  edge_index: {tuple(self.edge_index.shape)}\n" 
+                f"  edge_weight: {tuple(self.edge_weight.shape)}\n"
+                f"  edge_attr: {tuple(self.edge_attr.shape)}\n"
+                f"  features: {tuple(self.features.shape)}\n"
+                f"  targets: {tuple(self.targets.shape)}\n"
+                f")")
+    
+    def __repr__(self):
+        return self.__str__()
+
+
+class CustomTemporalDataset(Dataset):
+    def __init__(
+            self, 
+            dataset: tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal, 
+            graph_transform = None
+            ):
+        self.data_template = self.wrap_single_data(dataset[0])
+        self.graph_transform = graph_transform  # Graph transform (static, only needs to be computed once)
+        self.data_template_transformed = self.apply_graph_transform(self.data_template)
+        self.dataset = self.transform_via_template(dataset)
+
+    def apply_graph_transform(self, datum):
+        if isinstance(self.graph_transform, Iterable):
+            for transform in self.graph_transform:
+                datum = transform(datum)
+        else:
+            datum = self.graph_transform(datum)
+        return datum
+
+    def wrap_single_data(self, data):
+        return CustomTemporalData(data.edge_index, data.edge_weight, data.num_nodes, data.x, data.y)
+    
+    def transform_via_template(self, dataset: tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal):
+        assert isinstance(dataset, tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal)
+        data_list = []
+
+        data_cls = type(self.data_template_transformed)
+        data_dict = {k: v for k, v in self.data_template_transformed.items()}
+
+        for i in range(dataset.snapshot_count):
+            # Basically copying the template
+            datum = data_cls(**data_dict)  
+
+            # Replace data
+            datum.features = dataset[i].x[:, 0, :]  # FIXME: This is specific to METRLA
+            datum.y = dataset[i].y
+            
+            data_list.append(datum)
+
+        return data_list
+
+    def __getitem__(self, idx):
+        data = self.dataset[idx]
+        return data
+
+    def __len__(self):
+        return len(self.dataset)
+    
+
 def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None):
     assert dataset_name == 'METRLA', "Only METRLA dataset is currently supported"
 
@@ -210,9 +214,9 @@ def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None):
     dataset_metrola = loader.get_dataset(num_timesteps_in=12, num_timesteps_out=12)
     train_data, val_data, test_data = create_train_val_test_split(dataset_metrola, max_len=max_len)
 
-    train_data = CustomTemporalDataset(train_data, transform=transform_train, pre_transform=pre_transform)
-    val_data = CustomTemporalDataset(val_data, transform=transform_eval, pre_transform=pre_transform)
-    test_data = CustomTemporalDataset(test_data, transform=transform_eval, pre_transform=pre_transform)
+    train_data = CustomTemporalDataset(train_data, graph_transform=[pre_transform, transform_train])
+    val_data = CustomTemporalDataset(val_data, graph_transform=[pre_transform, transform_eval])
+    test_data = CustomTemporalDataset(test_data, graph_transform=[pre_transform, transform_eval])
 
     train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
     val_loader = DataLoader(val_data, batch_size=1, shuffle=False)

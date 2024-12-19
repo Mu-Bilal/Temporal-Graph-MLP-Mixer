@@ -40,17 +40,18 @@ def create_model(cfg):  # TODO: Put into GMMModel
 
 def train_model(cfg):
     # Create dataloaders
-    train_loader, val_loader, test_loader = create_dataloaders(cfg, 'METRLA', max_len=100)
+    train_loader, val_loader, test_loader = create_dataloaders(cfg, 'METRLA')
     
     # Create model
     model = create_model(cfg)
 
     # Set up logging
-    logger = WandbLogger(
-        save_dir='./logs',
-        project='GMM-1',
-        entity='Temporal-GMM'
-    )
+    # logger = WandbLogger(
+    #     save_dir='./logs',
+    #     project='GMM-1',
+    #     entity='Temporal-GMM'
+    # )
+    logger = None
 
     trainer = pl.Trainer(
         max_epochs=cfg.train.epochs,

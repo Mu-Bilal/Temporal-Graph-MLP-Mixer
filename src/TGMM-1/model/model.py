@@ -76,7 +76,8 @@ class GMMModel(pl.LightningModule):
         self.horizon = 12
         self.n_nodes = 207
         self.transformer_encoder = MLPMixerTemporal(nhid=nhid, dropout=mlpmixer_dropout, nlayer=nlayer_mlpmixer, n_patches=self.n_patches, num_timesteps=self.num_timesteps)
-        self.readout = Readout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon)
+        self.readout = torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
+        # Readout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon)
 
     def forward(self, data):
         """
@@ -105,7 +106,7 @@ class GMMModel(pl.LightningModule):
                 x += self.lap_encoder(data.lap_pos_enc)
             edge_attr = data.edge_attr
             if edge_attr is None:
-                edge_attr = data.edge_index.new_zeros(data.edge_index.size(-1))
+                edge_attr = data.edge_index.new_zeros(data.edge_index.size(-1), dtype=torch.float32)
             edge_attr = self.edge_encoder(edge_attr.unsqueeze(-1))
 
             # Patch Encoder
@@ -152,19 +153,37 @@ class GMMModel(pl.LightningModule):
             sign_flip = (2 * (torch.rand(batch_pos_enc.size(1)) >= 0.5) - 1).float()  # array of +-1
             batch.lap_pos_enc = batch_pos_enc * sign_flip.unsqueeze(0)
 
-        out = self.forward(batch)  # (batch_size, n_nodes*n_timesteps)
-        targets = batch.targets.unsqueeze(0)
-        loss = self.criterion(out, targets)
-        self.log_dict({'train_loss': loss}, batch_size=batch.num_graphs)
+        pred = self.forward(batch)  # (batch_size, n_nodes*n_timesteps)
+        targets = batch.y.unsqueeze(0)
+        loss = self.criterion(pred, targets)
+        metrics = self.calc_metrics(pred, targets, key_prefix='train')
+        metrics.update({'train/loss': loss})
+        self.log_dict(metrics, batch_size=batch.num_graphs)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        out = self.forward(batch)
-        targets = batch.targets.unsqueeze(0)
-        loss = self.criterion(out, targets)
-        self.log_dict({'val_loss': loss}, batch_size=batch.num_graphs)
+        pred = self.forward(batch)
+        targets = batch.y.unsqueeze(0)
+        loss = self.criterion(pred, targets)
+        metrics = self.calc_metrics(pred, targets, key_prefix='valid')
+        metrics.update({'valid/loss': loss})
+        self.log_dict(metrics, batch_size=batch.num_graphs)
         return loss
-        
+    
+    def calc_metrics(self, pred, targets, key_prefix='valid'):
+
+        def calc_metrics_for_horizon(pred, targets, horizon):
+            return {
+                f'{key_prefix}/mae-{horizon}': torch.mean(torch.abs(pred[:, :, horizon] - targets[:, :, horizon])),
+                f'{key_prefix}/rmse-{horizon}': torch.sqrt(torch.mean((pred[:, :, horizon] - targets[:, :, horizon])**2)),
+                f'{key_prefix}/mape-{horizon}': torch.mean(torch.abs((pred[:, :, horizon] - targets[:, :, horizon]) / targets[:, :, horizon])),
+            }
+
+        metrics = {}
+        for horizon in [2, 5, 11]:
+            metrics.update(calc_metrics_for_horizon(pred, targets, horizon))
+        return metrics
+    
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.cfg.train.lr, weight_decay=self.cfg.train.wd)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -177,7 +196,7 @@ class GMMModel(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "val_loss",
+                "monitor": "valid/loss",
                 "interval": "epoch",
                 "frequency": 1,
             },
