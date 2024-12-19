@@ -5,6 +5,7 @@ from torch_scatter import scatter
 from einops.layers.torch import Rearrange
 from einops import rearrange
 from model.mlp_mixer import MLPMixerTemporal
+import pandas as pd
 
 from model.elements import MLP
 from model.gnn import GNN
@@ -12,12 +13,32 @@ from model.gnn import GNN
 
 
 class Readout(nn.Module):
-    def __init__(self, nhid, n_patches, timesteps, nout, horizon):  # FIXME: Nout = nout*nNodes but here nout=1
+    def __init__(self, nhid, n_patches, timesteps, nout, horizon, data_example):  # FIXME: Nout = nout*nNodes but here nout=1; Dont actually pass the whole data_example!
         super().__init__()
-        self.mlp = MLP(nhid*n_patches*timesteps, nout*horizon, nlayer=2, with_final_activation=False)
+        self.rearrange_in = Rearrange('b t p f -> b p (t f)')
+        self.rearrange_out = Rearrange('b p (t f) -> b t p f', t=timesteps)
+        # out = rearrange(out, 'b (n_nodes horizon) -> b n_nodes horizon', n_nodes=self.n_nodes)
+
+        self.mlps = []
+        for i, patch_node_cnt in enumerate(pd.Series(data_example.subgraphs_batch).value_counts(sort=False)): 
+            mlp = nn.Linear(nhid*timesteps, patch_node_cnt*horizon)  # in: Data from batch (n_timesteps*n_features) -> out: (n_nodes_per_THIS_patch, horizon)
+            self.mlps.append(mlp)
+
+        self.subgraph_count = data_example.subgraphs_batch.max()
+        self.patch_node_map = [data_example.subgraphs_nodes_mapper[data_example.subgraphs_batch == i] for i in range(self.subgraph_count)]
+        self.horizon = horizon
+        self.n_nodes = data_example.num_nodes
 
     def forward(self, x):
-        return self.mlp(x)
+        x = self.rearrange_in(x)
+
+        out_all = torch.zeros(x.shape[0], self.n_nodes, self.horizon)
+        for i, (mlp, patch_node_map) in enumerate(zip(self.mlps, self.patch_node_map)):  # TODO: Use scatter for this instead?
+            out_patch = mlp(x[:, i, :])
+            out_reshaped = rearrange(out_patch, 'b (num_nodes h) -> b num_nodes h', h=self.horizon)  # FIXME
+            out_all[:, patch_node_map, :] = out_reshaped
+
+        return out_all
 
 
 class GMMModel(pl.LightningModule):
@@ -37,9 +58,11 @@ class GMMModel(pl.LightningModule):
                  pooling='mean',
                  n_patches=32,
                  patch_rw_dim=0,
-                 cfg=None):
+                 cfg=None,
+                 data_example=None):
 
         super().__init__()
+        assert data_example is not None
         self.dropout = dropout
         self.use_rw = rw_dim > 0
         self.use_lap = lap_dim > 0
@@ -66,18 +89,18 @@ class GMMModel(pl.LightningModule):
         self.U = nn.ModuleList([MLP(self.nhid, self.nhid, nlayer=1, with_final_activation=True) for _ in range(nlayer_gnn-1)])
 
         
-        self.reshape = Rearrange('(B p) d ->  B p d', p=self.n_patches)  # (batch_size, n_patches, n_features) where n_features=n_hid is the number of features per patch
+        self.reshape_patchpe = Rearrange('(B p) d ->  B p d', p=self.n_patches)  # (batch_size, n_patches, n_features) where n_features=n_hid is the number of features per patch
         # self.output_decoder = MLP(nhid, nout, nlayer=2, with_final_activation=False)
         
         # New 
         self.criterion = torch.nn.L1Loss()  # MAE
         self.cfg = cfg
-        self.num_timesteps = 12  # FIXME: make this dynamic
-        self.horizon = 12
-        self.n_nodes = 207
+        self.num_timesteps = data_example.features.shape[1]  # FIXME: make this dynamic
+        self.horizon = data_example.targets.shape[1]
+        self.n_nodes = data_example.num_nodes
         self.transformer_encoder = MLPMixerTemporal(nhid=nhid, dropout=mlpmixer_dropout, nlayer=nlayer_mlpmixer, n_patches=self.n_patches, num_timesteps=self.num_timesteps)
-        self.readout = torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
-        # Readout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon)
+        self.readout = Readout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon, data_example)
+        # torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
 
     def forward(self, data):
         """
@@ -96,7 +119,7 @@ class GMMModel(pl.LightningModule):
         assert data.num_nodes == self.n_nodes
 
         all_mixer_x = torch.zeros(1, self.num_timesteps, self.n_patches, self.nhid)  # FIXME: Check if first dim (batch_size) is ever more than one?
-        for i in range(data.features.shape[1]):
+        for i in range(data.features.shape[1]):  # Iterate over past timesteps
             # For each time step, encode the features
             x = self.input_encoder(data.features[:, i].unsqueeze(-1))
             # Node PE (positional encoding, either random walk or Laplacian eigenvectors, canonical choices for graphs)
@@ -126,22 +149,15 @@ class GMMModel(pl.LightningModule):
             # Patch PE
             if self.patch_rw_dim > 0:
                 subgraph_x += self.patch_rw_encoder(data.patch_pe)
-            mixer_x = self.reshape(subgraph_x)
+            mixer_x = self.reshape_patchpe(subgraph_x)
             all_mixer_x[0, i, :, :] = mixer_x  # TODO: Check if mixer_x does indeed have batch_size (first dim) = 0
 
-
-        # MLPMixer  # TURN INTO MULTI-HEAD REGRESSION (invariant to permutation of patches, check HDTTS paper for this)
+        # MLPMixer
         mixer_x = self.transformer_encoder(all_mixer_x, None, None)
 
         # Decoding / Readout
+        out = self.readout(mixer_x)
 
-        out = self.readout(rearrange(mixer_x, 'b t p f -> b (t p f)'))  # (batch_size, n_timesteps, n_patches, n_features) -> (batch_size, n_nodes*n_timesteps)
-        out = rearrange(out, 'b (n_nodes horizon) -> b n_nodes horizon', n_nodes=self.n_nodes)
-        # # Global Average Pooling
-        # x = (mixer_x * data.mask.unsqueeze(-1)).sum(1) / data.mask.sum(1, keepdim=True)
-
-        # # Readout
-        # out = self.output_decoder(x).squeeze()
         return out
 
     def training_step(self, batch, batch_idx):

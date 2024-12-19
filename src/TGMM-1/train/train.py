@@ -2,7 +2,7 @@ import sys
 import os
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from omegaconf import OmegaConf
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,7 +14,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-def create_model(cfg):  # TODO: Put into GMMModel
+def create_model(cfg, data_example):  # TODO: Put into GMMModel
     assert cfg.dataset == 'METRLA'
     nfeat_node = 1
     nfeat_edge = 1
@@ -35,7 +35,8 @@ def create_model(cfg):  # TODO: Put into GMMModel
                     mlpmixer_dropout=cfg.train.mlpmixer_dropout,
                     n_patches=cfg.metis.n_patches,
                     patch_rw_dim=cfg.pos_enc.patch_rw_dim,
-                    cfg=cfg)
+                    cfg=cfg,
+                    data_example=data_example)
 
 
 def train_model(cfg):
@@ -43,15 +44,16 @@ def train_model(cfg):
     train_loader, val_loader, test_loader = create_dataloaders(cfg, 'METRLA')
     
     # Create model
-    model = create_model(cfg)
+    model = create_model(cfg, train_loader.dataset[0])
 
     # Set up logging
-    # logger = WandbLogger(
-    #     save_dir='./logs',
+    logger = TensorBoardLogger('.')
+    # WandbLogger(
+    #     save_dir='./logs',#
     #     project='GMM-1',
     #     entity='Temporal-GMM'
     # )
-    logger = None
+    # logger = None
 
     trainer = pl.Trainer(
         max_epochs=cfg.train.epochs,
