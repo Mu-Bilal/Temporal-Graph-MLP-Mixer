@@ -94,21 +94,23 @@ def create_dataset(cfg):
     return train_dataset, val_dataset, test_dataset
 
 
-def create_train_val_test_split(dataset, max_len: int = None):
+def create_train_val_test_split(dataset, max_len: int = None, train_size: float = 0.7, val_size: float = 0.15):
     if isinstance(dataset, tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal):
         total_snapshots = dataset.snapshot_count
     else:
         total_snapshots = len(dataset)
-
     if max_len:
         total_snapshots = min(total_snapshots, max_len)
-    train_size = int(0.7 * total_snapshots)
-    val_size = int(0.15 * total_snapshots)
-    test_size = total_snapshots - train_size - val_size
+    train_size_abs = int(train_size * total_snapshots)
+    val_size_abs = int(val_size * total_snapshots)
 
-    train_data = dataset[:train_size]
-    val_data = dataset[train_size:train_size+val_size] 
-    test_data = dataset[train_size+val_size:total_snapshots]
+    train_data = dataset[:train_size_abs]
+    val_data = dataset[train_size_abs:train_size_abs+val_size_abs]
+
+    if train_size_abs+val_size_abs < total_snapshots:
+        test_data = dataset[train_size_abs+val_size_abs:total_snapshots]
+    else:
+        test_data = None
 
     return train_data, val_data, test_data
 
@@ -143,7 +145,8 @@ class CustomTemporalDataset(Dataset):
     def __init__(
             self, 
             dataset: tgt.signal.static_graph_temporal_signal.StaticGraphTemporalSignal, 
-            graph_transform = None
+            graph_transform = None,
+            batch_size: int = 1
             ):
         self.data_template = self.wrap_single_data(dataset[0])
         self.graph_transform = graph_transform  # Graph transform (static, only needs to be computed once)
@@ -188,7 +191,7 @@ class CustomTemporalDataset(Dataset):
         return len(self.dataset)
     
 
-def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None):
+def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None, train_size: float = 0.7, val_size: float = 0.15):
     assert dataset_name == 'METRLA', "Only METRLA dataset is currently supported"
 
     pre_transform = PositionalEncodingTransform(rw_dim=cfg.pos_enc.rw_dim, lap_dim=cfg.pos_enc.lap_dim)
@@ -212,14 +215,18 @@ def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None):
 
     loader = METRLADatasetLoader()
     dataset_metrola = loader.get_dataset(num_timesteps_in=12, num_timesteps_out=12)
-    train_data, val_data, test_data = create_train_val_test_split(dataset_metrola, max_len=max_len)
+    train_data, val_data, test_data = create_train_val_test_split(dataset_metrola, max_len=max_len, train_size=train_size, val_size=val_size)
 
     train_data = CustomTemporalDataset(train_data, graph_transform=[pre_transform, transform_train])
-    val_data = CustomTemporalDataset(val_data, graph_transform=[pre_transform, transform_eval])
-    test_data = CustomTemporalDataset(test_data, graph_transform=[pre_transform, transform_eval])
+    train_loader = DataLoader(train_data, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers)
 
-    train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=1, shuffle=False)
-    test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
+    val_data = CustomTemporalDataset(val_data, graph_transform=[pre_transform, transform_eval])
+    val_loader = DataLoader(val_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
+
+    if test_data is not None:
+        test_data = CustomTemporalDataset(test_data, graph_transform=[pre_transform, transform_eval])
+        test_loader = DataLoader(test_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    else:
+        test_loader = None
 
     return train_loader, val_loader, test_loader

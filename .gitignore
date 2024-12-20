@@ -1,6 +1,7 @@
 dataset/
 ZINC/
 logs/
+lightning_logs/
 
 
 data/

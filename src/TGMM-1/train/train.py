@@ -41,19 +41,25 @@ def create_model(cfg, data_example):  # TODO: Put into GMMModel
 
 def train_model(cfg):
     # Create dataloaders
-    train_loader, val_loader, test_loader = create_dataloaders(cfg, 'METRLA')
+    train_loader, val_loader, test_loader = create_dataloaders(
+        cfg, 
+        'METRLA', 
+        max_len=100, 
+        train_size=0.9, 
+        val_size=0.1
+    )
     
     # Create model
     model = create_model(cfg, train_loader.dataset[0])
 
     # Set up logging
-    logger = TensorBoardLogger('.')
-    # WandbLogger(
+    # logger = TensorBoardLogger('.')
+    # logger = WandbLogger(
     #     save_dir='./logs',#
     #     project='GMM-1',
     #     entity='Temporal-GMM'
     # )
-    # logger = None
+    logger = None
 
     trainer = pl.Trainer(
         max_epochs=cfg.train.epochs,

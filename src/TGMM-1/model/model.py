@@ -12,7 +12,10 @@ from model.gnn import GNN
 
 
 
-class Readout(nn.Module):
+class CompletePatchReadout(nn.Module):
+    """
+    Uses a seperate MLP to decode each patch to all its nodes.
+    """
     def __init__(self, nhid, n_patches, timesteps, nout, horizon, data_example):  # FIXME: Nout = nout*nNodes but here nout=1; Dont actually pass the whole data_example!
         super().__init__()
         self.rearrange_in = Rearrange('b t p f -> b p (t f)')
@@ -20,10 +23,13 @@ class Readout(nn.Module):
         # out = rearrange(out, 'b (n_nodes horizon) -> b n_nodes horizon', n_nodes=self.n_nodes)
 
         self.mlps = []
+        self.nparams = 0
         for i, patch_node_cnt in enumerate(pd.Series(data_example.subgraphs_batch).value_counts(sort=False)): 
             mlp = nn.Linear(nhid*timesteps, patch_node_cnt*horizon)  # in: Data from batch (n_timesteps*n_features) -> out: (n_nodes_per_THIS_patch, horizon)
             self.mlps.append(mlp)
-
+            self.nparams += (nhid*timesteps+1)*patch_node_cnt*horizon
+        
+        print(f"Readout param count: {self.nparams}")
         self.subgraph_count = data_example.subgraphs_batch.max()
         self.patch_node_map = [data_example.subgraphs_nodes_mapper[data_example.subgraphs_batch == i] for i in range(self.subgraph_count)]
         self.horizon = horizon
@@ -39,7 +45,42 @@ class Readout(nn.Module):
             out_all[:, patch_node_map, :] = out_reshaped
 
         return out_all
+    
 
+class SingleNodeReadout(nn.Module):
+    """
+    Uses a single MLP a patch + node input to the node output.
+    """
+    def __init__(self, nhid, n_patches, timesteps, nout, horizon, data_example):
+        super().__init__()
+
+        in_dim = nhid*timesteps + timesteps
+        out_dim = horizon
+        self.horizon = horizon
+        self.n_nodes = data_example.num_nodes
+        self.subgraph_count = data_example.subgraphs_batch.max()
+        self.patch_node_map = [data_example.subgraphs_nodes_mapper[data_example.subgraphs_batch == i] for i in range(self.subgraph_count)]
+
+        self.mlp = MLP(in_dim, out_dim, nlayer=2, with_final_activation=False)
+
+    def forward(self, mixer_x, data):
+        """
+        mixer_x: (batch_size, n_timesteps, n_patches, n_features)
+        data: CustomTemporalData
+
+        For each node, we have a single MLP that takes the patch + node input and outputs the node output.
+        """
+        out_all = torch.zeros(1, self.n_nodes, self.horizon)
+        for patch_idx, associated_nodes_idx in enumerate(self.patch_node_map):
+            # In the following n_nodes is the number of nodes in the current patch
+            patch_x = mixer_x[:, :, patch_idx, :]  # (batch_size, n_timesteps, n_hidden)
+            patch_x = rearrange(patch_x, 'b t f -> b (t f)').unsqueeze(1)  # (batch_size, 1, n_timesteps*n_hidden)
+            patch_x = patch_x.repeat(1, associated_nodes_idx.size(0), 1)  # (batch_size, n_nodes, n_timesteps*n_hidden)
+            node_x = data.features[associated_nodes_idx].unsqueeze(0)  # (batch_size=1, n_nodes, n_timesteps) FIXME: Check batch size
+            x = torch.cat([patch_x, node_x], dim=-1)  # (batch_size, n_nodes, n_timesteps*n_hidden + n_timesteps)
+            out = self.mlp(x)
+            out_all[0, associated_nodes_idx, :] = out
+        return out_all
 
 class GMMModel(pl.LightningModule):
 
@@ -99,7 +140,7 @@ class GMMModel(pl.LightningModule):
         self.horizon = data_example.targets.shape[1]
         self.n_nodes = data_example.num_nodes
         self.transformer_encoder = MLPMixerTemporal(nhid=nhid, dropout=mlpmixer_dropout, nlayer=nlayer_mlpmixer, n_patches=self.n_patches, num_timesteps=self.num_timesteps)
-        self.readout = Readout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon, data_example)
+        self.readout = SingleNodeReadout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon, data_example)
         # torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
 
     def forward(self, data):
@@ -156,7 +197,7 @@ class GMMModel(pl.LightningModule):
         mixer_x = self.transformer_encoder(all_mixer_x, None, None)
 
         # Decoding / Readout
-        out = self.readout(mixer_x)
+        out = self.readout(mixer_x, data)
 
         return out
 
@@ -190,13 +231,13 @@ class GMMModel(pl.LightningModule):
 
         def calc_metrics_for_horizon(pred, targets, horizon):
             return {
-                f'{key_prefix}/mae-{horizon}': torch.mean(torch.abs(pred[:, :, horizon] - targets[:, :, horizon])),
-                f'{key_prefix}/rmse-{horizon}': torch.sqrt(torch.mean((pred[:, :, horizon] - targets[:, :, horizon])**2)),
-                f'{key_prefix}/mape-{horizon}': torch.mean(torch.abs((pred[:, :, horizon] - targets[:, :, horizon]) / targets[:, :, horizon])),
+                f'{key_prefix}/mae-{horizon}': torch.mean(torch.abs(pred[:, :, horizon-1] - targets[:, :, horizon-1])),
+                f'{key_prefix}/rmse-{horizon}': torch.sqrt(torch.mean((pred[:, :, horizon-1] - targets[:, :, horizon-1])**2)),
+                f'{key_prefix}/mape-{horizon}': 100*torch.mean(torch.abs((pred[:, :, horizon-1] - targets[:, :, horizon-1]) / targets[:, :, horizon-1])),
             }
 
         metrics = {}
-        for horizon in [2, 5, 11]:
+        for horizon in [3, 6, 12]:
             metrics.update(calc_metrics_for_horizon(pred, targets, horizon))
         return metrics
     

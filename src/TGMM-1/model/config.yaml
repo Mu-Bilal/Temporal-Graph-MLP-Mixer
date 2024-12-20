@@ -8,7 +8,7 @@ depth: -1  # tree depth for TreeDataset
 
 # Training options
 train:
-  batch_size: 128  # Total graph mini-batch size
+  batch_size: 64  # Total graph mini-batch size
   epochs: 1000  # Maximal number of epochs
   runs: 4  # Number of runs with random init
   lr: 0.001  # Base learning rate
@@ -23,15 +23,15 @@ train:
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options
   gMHA_type: MLPMixer  # GraphMLPMixer or graph-based multihead attention: [MLPMixer, Hadamard, Standard, Graph, Addictive, Kernel]
-  hidden_size: 16  # Hidden size of the model
+  hidden_size: 64  # Hidden size of the model
   nlayer_gnn: 4  # Number of gnn layers
   nlayer_mlpmixer: 4  # Number of mlp mixer layers
-  pool: mean  # Pooling type for generaating graph/subgraph embedding from node embeddings
+  pool: mean  # Pooling type for generating graph/subgraph embedding from node embeddings
   residual: true  # Use residual connection
 
 # Positional encoding options
 pos_enc:
-  rw_dim: 0  # Random walk structural encoding
+  rw_dim: 8  # Random walk structural encoding
   lap_dim: 0  # Laplacian eigenvectors positional encoding
   patch_rw_dim: 8  # Patch random walk structural encoding
   patch_num_diff: -1  # Patch PE diffusion steps
