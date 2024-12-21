@@ -4,6 +4,7 @@ from torch_geometric.loader import DataLoader
 from omegaconf import OmegaConf
 from torch_geometric_temporal.dataset import METRLADatasetLoader
 from typing import Iterable
+import ssl
 
 from model.transform import GraphPartitionTransform, PositionalEncodingTransform
 
@@ -105,8 +106,8 @@ class CustomTemporalDataset(Dataset):
         return len(self.dataset)
     
 
-def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None, train_size: float = 0.7, val_size: float = 0.15):
-    assert dataset_name == 'METRLA', "Only METRLA dataset is currently supported"
+def create_dataloaders(cfg: OmegaConf):
+    assert cfg.dataset == 'METRLA', "Only METRLA dataset is currently supported"
 
     pre_transform = PositionalEncodingTransform(rw_dim=cfg.pos_enc.rw_dim, lap_dim=cfg.pos_enc.lap_dim)
     if cfg.metis.n_patches > 0:
@@ -126,10 +127,10 @@ def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None, t
                                                   patch_rw_dim=cfg.pos_enc.patch_rw_dim,
                                                   patch_num_diff=cfg.pos_enc.patch_num_diff)
 
-
+    ssl._create_default_https_context = ssl._create_unverified_context
     loader = METRLADatasetLoader()
-    dataset_metrola = loader.get_dataset(num_timesteps_in=12, num_timesteps_out=12)
-    train_data, val_data, test_data = create_train_val_test_split(dataset_metrola, max_len=max_len, train_size=train_size, val_size=val_size)
+    dataset_metrola = loader.get_dataset(num_timesteps_in=cfg.train.window, num_timesteps_out=cfg.train.horizon)
+    train_data, val_data, test_data = create_train_val_test_split(dataset_metrola, max_len=cfg.train.max_len, train_size=cfg.train.train_size, val_size=cfg.train.val_size)
 
     train_data = CustomTemporalDataset(train_data, graph_transform=[pre_transform, transform_train])
     train_loader = DataLoader(train_data, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers, drop_last=True)

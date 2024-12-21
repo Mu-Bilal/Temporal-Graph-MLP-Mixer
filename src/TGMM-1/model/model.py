@@ -2,7 +2,6 @@ import pytorch_lightning as pl
 import torch.nn as nn
 import torch
 from torch_scatter import scatter
-from einops.layers.torch import Rearrange
 from einops import rearrange
 from model.mlp_mixer import MLPMixerTemporal
 import pandas as pd
@@ -88,65 +87,53 @@ class SingleNodeReadout(nn.Module):
         out = rearrange(mlp_out, 'B n h -> (B n) h')
         return out
 
+
 class GMMModel(pl.LightningModule):
 
-    def __init__(self,
-                 nfeat_node, nfeat_edge,
-                 nhid, nout,
-                 nlayer_gnn,
-                 nlayer_mlpmixer,
-                 gnn_type,
-                 rw_dim=0,
-                 lap_dim=0,
-                 dropout=0,
-                 mlpmixer_dropout=0,
-                 bn=True,
-                 res=True,
-                 pooling='mean',
-                 n_patches=32,
-                 patch_rw_dim=0,
-                 cfg=None,
-                 data_example=None):
-
+    def __init__(self, cfg=None, data_example=None):
         super().__init__()
+        assert cfg.metis.n_patches > 0
         assert data_example is not None
-        self.dropout = dropout
-        self.use_rw = rw_dim > 0
-        self.use_lap = lap_dim > 0
 
-        self.pooling = pooling
-        self.res = res
-        self.patch_rw_dim = patch_rw_dim
+        self.bn = True
+        self.res = True
 
-        self.nhid = nhid
-        self.n_patches = n_patches
+        self.cfg = cfg
+        self.nhid = cfg.model.hidden_size
+        self.n_patches = cfg.metis.n_patches
+        self.nlayer_gnn = cfg.model.nlayer_gnn
+        self.nlayer_mlpmixer = cfg.model.nlayer_mlpmixer
+        self.gnn_type = cfg.model.gnn_type
+        self.pooling = cfg.model.pool
+        self.dropout = cfg.train.dropout
+        self.mlpmixer_dropout = cfg.train.mlpmixer_dropout
+        self.rw_dim = cfg.pos_enc.rw_dim
+        self.lap_dim = cfg.pos_enc.lap_dim
+        self.patch_rw_dim = cfg.pos_enc.patch_rw_dim
+        self.use_rw = self.rw_dim > 0
+        self.use_lap = self.lap_dim > 0
 
         if self.use_rw:
-            self.rw_encoder = MLP(rw_dim, self.nhid, 1)
+            self.rw_encoder = MLP(self.rw_dim, self.nhid, 1)
         if self.use_lap:
-            self.lap_encoder = MLP(lap_dim, self.nhid, 1)
+            self.lap_encoder = MLP(self.lap_dim, self.nhid, 1)
         if self.patch_rw_dim > 0:
             self.patch_rw_encoder = MLP(self.patch_rw_dim, self.nhid, 1)
 
-        self.input_encoder = nn.Linear(nfeat_node, self.nhid)
-        self.edge_encoder = nn.Linear(nfeat_edge, self.nhid)
+        self.input_encoder = nn.Linear(1, self.nhid)
+        self.edge_encoder = nn.Linear(1, self.nhid)
 
-        self.gnns = nn.ModuleList([GNN(nin=self.nhid, nout=self.nhid, nlayer_gnn=1, gnn_type=gnn_type,
-                                  bn=bn, dropout=dropout, res=res) for _ in range(nlayer_gnn)])
-        self.U = nn.ModuleList([MLP(self.nhid, self.nhid, nlayer=1, with_final_activation=True) for _ in range(nlayer_gnn-1)])
+        self.gnns = nn.ModuleList([GNN(nin=self.nhid, nout=self.nhid, nlayer_gnn=1, gnn_type=self.gnn_type,
+                                  bn=self.bn, dropout=self.dropout, res=self.res) for _ in range(self.nlayer_gnn)])
+        self.U = nn.ModuleList([MLP(self.nhid, self.nhid, nlayer=1, with_final_activation=True) for _ in range(self.nlayer_gnn-1)])
 
-        
-        self.reshape_patchpe = Rearrange('(B p) d ->  B p d', p=self.n_patches)  # (batch_size, n_patches, n_features) where n_features=n_hid is the number of features per patch
-        # self.output_decoder = MLP(nhid, nout, nlayer=2, with_final_activation=False)
-        
         # New 
         self.criterion = torch.nn.L1Loss()  # MAE
-        self.cfg = cfg
-        self.num_timesteps = data_example.features.shape[1]  # FIXME: make this dynamic
-        self.horizon = data_example.targets.shape[1]
+        self.window = cfg.train.window
+        self.horizon = cfg.train.horizon
         self.n_nodes = data_example.num_nodes
-        self.transformer_encoder = MLPMixerTemporal(nhid=nhid, dropout=mlpmixer_dropout, nlayer=nlayer_mlpmixer, n_patches=self.n_patches, num_timesteps=self.num_timesteps)
-        self.readout = CompletePatchReadout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon, data_example)
+        self.transformer_encoder = MLPMixerTemporal(nhid=self.nhid, dropout=self.mlpmixer_dropout, nlayer=self.nlayer_mlpmixer, n_patches=self.n_patches, n_timesteps=self.window)
+        self.readout = CompletePatchReadout(self.nhid, self.n_patches, self.window, self.n_nodes, self.horizon, data_example)
         # torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
 
     def forward(self, data):
@@ -173,7 +160,7 @@ class GMMModel(pl.LightningModule):
         assert edge_attr is not None
         # if edge_attr is None:
         #     edge_attr = data.edge_index.new_zeros(data.edge_index.size(-1), dtype=torch.float32)
-        edge_attr = self.edge_encoder(edge_attr.unsqueeze(-1)).unsqueeze(-3).repeat(self.num_timesteps, 1, 1)  # Add time dimension
+        edge_attr = self.edge_encoder(edge_attr.unsqueeze(-1)).unsqueeze(-3).repeat(self.window, 1, 1)  # Add time dimension
 
         # Patch Encoder
         x = x[:, data.subgraphs_nodes_mapper]

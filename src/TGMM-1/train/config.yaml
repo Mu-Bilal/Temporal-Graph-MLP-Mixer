@@ -1,17 +1,15 @@
 # Basic options
-dataset: ZINC  # Dataset name
-num_workers: 1  # Additional num of worker for data loading
+dataset: METRLA  # Dataset name
+num_workers: 2  # Additional num of worker for data loading
 device: cpu  # Cuda device number, used for machine with multiple gpus
 seed: null  # Whether fix the running seed to remove randomness
 logfile: null  # Custom log file name
-depth: -1  # tree depth for TreeDataset
 
 # Training options
 train:
   batch_size: 8  # Total graph mini-batch size
   epochs: 1000  # Maximal number of epochs
-  runs: 4  # Number of runs with random init
-  lr: 0.001  # Base learning rate
+  lr: 3e-4  # Base learning rate
   lr_patience: 20  # number of steps before reduce learning rate
   lr_decay: 0.5  # learning rate decay factor
   wd: 0.0  # L2 regularization, weight decay
@@ -19,19 +17,24 @@ train:
   mlpmixer_dropout: 0.0  # Dropout rate for MLPMixer
   min_lr: 1.0e-5  # A lower bound on the learning rate.
   optimizer: Adam  # optimizer
+  max_len: 100  # Maximal number of timesteps in the dataset
+  train_size: 0.9  # Train size
+  val_size: 0.1  # Validation size
+  horizon: 12  # Number of timesteps to predict
+  window: 12  # Number of timesteps to use for prediction
 
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options
   gMHA_type: MLPMixer  # GraphMLPMixer or graph-based multihead attention: [MLPMixer, Hadamard, Standard, Graph, Addictive, Kernel]
   hidden_size: 64  # Hidden size of the model
   nlayer_gnn: 4  # Number of gnn layers
-  nlayer_mlpmixer: 4  # Number of mlp mixer layers
+  nlayer_mlpmixer: 8  # Number of mlp mixer layers
   pool: mean  # Pooling type for generating graph/subgraph embedding from node embeddings
   residual: true  # Use residual connection
 
 # Positional encoding options
 pos_enc:
-  rw_dim: 8  # Random walk structural encoding
+  rw_dim: 16  # Random walk structural encoding
   lap_dim: 0  # Laplacian eigenvectors positional encoding
   patch_rw_dim: 8  # Patch random walk structural encoding
   patch_num_diff: -1  # Patch PE diffusion steps
@@ -40,6 +43,6 @@ pos_enc:
 metis:
   enable: true  # Enable Metis partition (otherwise use random partition)
   online: true  # Enable data augmentation
-  n_patches: 32  # The number of partitions
-  drop_rate: 0.3  # Whether to randomly drop a set of edges before each metis partition
+  n_patches: 10  # The number of partitions
+  drop_rate: 0  # Whether to randomly drop a set of edges before each metis partition
   num_hops: 1  # expanding patches with k hop neighbourhood

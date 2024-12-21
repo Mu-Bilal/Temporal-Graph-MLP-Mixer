@@ -104,16 +104,16 @@ class MLPMixerTemporal(nn.Module):
                  nhid,
                  nlayer,
                  n_patches,
-                 num_timesteps,
+                 n_timesteps,
                  dropout=0,
                  with_final_norm=True
                  ):
         super().__init__()
         self.n_patches = n_patches
-        self.num_timesteps = num_timesteps
+        self.n_timesteps = n_timesteps
         self.with_final_norm = with_final_norm
         self.mixer_blocks = nn.ModuleList(
-            [MixerBlockTemporal(nhid, self.n_patches, self.num_timesteps, nhid*4, nhid//2, self.num_timesteps, dropout=dropout) for _ in range(nlayer)])  # FIXME: Check what to use for temporal_dim.
+            [MixerBlockTemporal(nhid, self.n_patches, self.n_timesteps, nhid*4, nhid//2, self.n_timesteps, dropout=dropout) for _ in range(nlayer)])  # FIXME: Check what to use for temporal_dim.
         if self.with_final_norm:
             self.layer_norm = nn.LayerNorm(nhid)
 

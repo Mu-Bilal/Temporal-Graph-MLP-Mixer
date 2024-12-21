@@ -4,7 +4,7 @@ import torch_geometric
 import re
 
 from model.subgraph_extractors import metis_subgraph, random_subgraph
-from model.pe import RWSE, LapPE, random_walk
+from model.positional_encoding import RWSE, LapPE, random_walk
 
 
 def cal_coarsen_adj(subgraphs_nodes_mask):
