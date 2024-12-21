@@ -53,20 +53,21 @@ def train_model(cfg):
     model = create_model(cfg, train_loader.dataset[0])
 
     # Set up logging
-    # logger = TensorBoardLogger('.')
-    # logger = WandbLogger(
-    #     save_dir='./logs',#
-    #     project='GMM-1',
-    #     entity='Temporal-GMM'
-    # )
-    logger = None
+    # logger = None
+    logger = WandbLogger(
+        save_dir='./logs',#
+        project='GMM-1',
+        entity='Temporal-GMM'
+    )
 
     trainer = pl.Trainer(
         max_epochs=cfg.train.epochs,
         accelerator='gpu' if torch.cuda.is_available() else 'cpu',
         devices=1,
         logger=logger,
-        deterministic=True if cfg.seed else False
+        deterministic=True if cfg.seed else False,
+        log_every_n_steps=min(50, len(train_loader)),
+        gradient_clip_val=5.0
     )
     
     trainer.fit(

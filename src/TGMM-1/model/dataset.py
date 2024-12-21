@@ -132,14 +132,14 @@ def create_dataloaders(cfg: OmegaConf, dataset_name: str, max_len: int = None, t
     train_data, val_data, test_data = create_train_val_test_split(dataset_metrola, max_len=max_len, train_size=train_size, val_size=val_size)
 
     train_data = CustomTemporalDataset(train_data, graph_transform=[pre_transform, transform_train])
-    train_loader = DataLoader(train_data, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers)
+    train_loader = DataLoader(train_data, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers, drop_last=True)
 
     val_data = CustomTemporalDataset(val_data, graph_transform=[pre_transform, transform_eval])
-    val_loader = DataLoader(val_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    val_loader = DataLoader(val_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers, drop_last=True)
 
     if test_data is not None:
         test_data = CustomTemporalDataset(test_data, graph_transform=[pre_transform, transform_eval])
-        test_loader = DataLoader(test_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers)
+        test_loader = DataLoader(test_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers, drop_last=True)
     else:
         test_loader = None
 

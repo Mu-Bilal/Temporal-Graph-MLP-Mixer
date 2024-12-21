@@ -18,9 +18,6 @@ class CompletePatchReadout(nn.Module):
     """
     def __init__(self, nhid, n_patches, timesteps, nout, horizon, data_example):  # FIXME: Nout = nout*nNodes but here nout=1; Dont actually pass the whole data_example!
         super().__init__()
-        self.rearrange_in = Rearrange('b t p f -> b p (t f)')
-        self.rearrange_out = Rearrange('b p (t f) -> b t p f', t=timesteps)
-        # out = rearrange(out, 'b (n_nodes horizon) -> b n_nodes horizon', n_nodes=self.n_nodes)
 
         self.mlps = []
         self.nparams = 0
@@ -35,15 +32,16 @@ class CompletePatchReadout(nn.Module):
         self.horizon = horizon
         self.n_nodes = data_example.num_nodes
 
-    def forward(self, x):
-        x = self.rearrange_in(x)
+    def forward(self, x, data):
+        x = rearrange(x, 'B t p f -> B p (t f)')
 
         out_all = torch.zeros(x.shape[0], self.n_nodes, self.horizon)
         for i, (mlp, patch_node_map) in enumerate(zip(self.mlps, self.patch_node_map)):  # TODO: Use scatter for this instead?
             out_patch = mlp(x[:, i, :])
-            out_reshaped = rearrange(out_patch, 'b (num_nodes h) -> b num_nodes h', h=self.horizon)  # FIXME
+            out_reshaped = rearrange(out_patch, 'B (n h) -> B n h', h=self.horizon)
             out_all[:, patch_node_map, :] = out_reshaped
 
+        out_all = rearrange(out_all, 'B n h -> (n B) h')
         return out_all
     
 
@@ -58,29 +56,37 @@ class SingleNodeReadout(nn.Module):
         out_dim = horizon
         self.horizon = horizon
         self.n_nodes = data_example.num_nodes
-        self.subgraph_count = data_example.subgraphs_batch.max()
+
+        # Following are for a whole batch, i.e. subgraph_count = batch_size * n_patches
+        self.subgraph_count = data_example.subgraphs_batch.max() + 1
         self.patch_node_map = [data_example.subgraphs_nodes_mapper[data_example.subgraphs_batch == i] for i in range(self.subgraph_count)]
 
         self.mlp = MLP(in_dim, out_dim, nlayer=2, with_final_activation=False)
 
     def forward(self, mixer_x, data):
         """
-        mixer_x: (batch_size, n_timesteps, n_patches, n_features)
+        mixer_x: (batch_size, n_timesteps, n_patches, nhid)
         data: CustomTemporalData
 
         For each node, we have a single MLP that takes the patch + node input and outputs the node output.
+
+        Currently assuming that each batch is complete (using drop_last=True in dataloader).
+
+        mlp_out: (batch_size, n_nodes*horizon)
+        mlp_in: (batch_size, n_timesteps*nhid + n_timesteps)
+        b.features.shape: torch.Size([6624, 12]) (batch_size*n_nodes, n_timesteps)
+        FIXME: Currently using seperate batch dimension but actually have to convert for both patch -> node and for final result. Change?
+        FIXME: Nodes that are part of two patches? Use scatter?
         """
-        out_all = torch.zeros(1, self.n_nodes, self.horizon)
-        for patch_idx, associated_nodes_idx in enumerate(self.patch_node_map):
-            # In the following n_nodes is the number of nodes in the current patch
-            patch_x = mixer_x[:, :, patch_idx, :]  # (batch_size, n_timesteps, n_hidden)
-            patch_x = rearrange(patch_x, 'b t f -> b (t f)').unsqueeze(1)  # (batch_size, 1, n_timesteps*n_hidden)
-            patch_x = patch_x.repeat(1, associated_nodes_idx.size(0), 1)  # (batch_size, n_nodes, n_timesteps*n_hidden)
-            node_x = data.features[associated_nodes_idx].unsqueeze(0)  # (batch_size=1, n_nodes, n_timesteps) FIXME: Check batch size
-            x = torch.cat([patch_x, node_x], dim=-1)  # (batch_size, n_nodes, n_timesteps*n_hidden + n_timesteps)
-            out = self.mlp(x)
-            out_all[0, associated_nodes_idx, :] = out
-        return out_all
+        passthrough = rearrange(data.features, '(B n) t -> B n t', B=data.num_graphs)
+
+        mixer_x = rearrange(mixer_x, 'B t p f -> (p B) t f')
+        mixer_x_nodes = scatter(mixer_x[data.subgraphs_batch], data.subgraphs_nodes_mapper, dim=0, reduce='mean')
+        mixer_x_nodes = rearrange(mixer_x_nodes, '(n B) t f -> B n (t f)', B=data.num_graphs)
+        mlp_in = torch.cat([passthrough, mixer_x_nodes], dim=-1)
+        mlp_out = self.mlp(mlp_in)
+        out = rearrange(mlp_out, 'B n h -> (B n) h')
+        return out
 
 class GMMModel(pl.LightningModule):
 
@@ -140,7 +146,7 @@ class GMMModel(pl.LightningModule):
         self.horizon = data_example.targets.shape[1]
         self.n_nodes = data_example.num_nodes
         self.transformer_encoder = MLPMixerTemporal(nhid=nhid, dropout=mlpmixer_dropout, nlayer=nlayer_mlpmixer, n_patches=self.n_patches, num_timesteps=self.num_timesteps)
-        self.readout = SingleNodeReadout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon, data_example)
+        self.readout = CompletePatchReadout(nhid, self.n_patches, self.num_timesteps, self.n_nodes, self.horizon, data_example)
         # torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
 
     def forward(self, data):
@@ -155,9 +161,6 @@ class GMMModel(pl.LightningModule):
             targets: (207, 12)
         )
         """
-        assert data.features.shape[1] == self.num_timesteps
-        assert data.targets.shape[1] == self.horizon
-        assert data.num_nodes == self.n_nodes
         features = data.features.permute(-1, -2)  # (n_timesteps, n_nodes)
 
         x = self.input_encoder(features.unsqueeze(-1))
@@ -190,11 +193,12 @@ class GMMModel(pl.LightningModule):
         # Patch PE
         if self.patch_rw_dim > 0:
             subgraph_x += self.patch_rw_encoder(data.patch_pe)
-        # mixer_x = rearrange(subgraph_x, 'B p f -> B p d', p=self.n_patches)
-        subgraph_x = subgraph_x.unsqueeze(0)  # QUICKFIX: Add batch dimension explicitely
+        
+        # Above: Puts all batches into one large, disjoint, graph. From here on, using leading batch dimension.
+        mixer_x = rearrange(subgraph_x, 't (p B) f -> B t p f', B=data.num_graphs, p=self.n_patches)
 
         # MLPMixer
-        mixer_x = self.transformer_encoder(subgraph_x, None, None)
+        mixer_x = self.transformer_encoder(mixer_x, None, None)
 
         # Decoding / Readout
         out = self.readout(mixer_x, data)
@@ -211,7 +215,7 @@ class GMMModel(pl.LightningModule):
             batch.lap_pos_enc = batch_pos_enc * sign_flip.unsqueeze(0)
 
         pred = self.forward(batch)  # (batch_size, n_nodes*n_timesteps)
-        targets = batch.y.unsqueeze(0)
+        targets = batch.y
         loss = self.criterion(pred, targets)
         metrics = self.calc_metrics(pred, targets, key_prefix='train')
         metrics.update({'train/loss': loss})
@@ -220,7 +224,7 @@ class GMMModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         pred = self.forward(batch)
-        targets = batch.y.unsqueeze(0)
+        targets = batch.y  # (batch_size*n_nodes, n_timesteps)
         loss = self.criterion(pred, targets)
         metrics = self.calc_metrics(pred, targets, key_prefix='valid')
         metrics.update({'valid/loss': loss})
@@ -231,9 +235,9 @@ class GMMModel(pl.LightningModule):
 
         def calc_metrics_for_horizon(pred, targets, horizon):
             return {
-                f'{key_prefix}/mae-{horizon}': torch.mean(torch.abs(pred[:, :, horizon-1] - targets[:, :, horizon-1])),
-                f'{key_prefix}/rmse-{horizon}': torch.sqrt(torch.mean((pred[:, :, horizon-1] - targets[:, :, horizon-1])**2)),
-                f'{key_prefix}/mape-{horizon}': 100*torch.mean(torch.abs((pred[:, :, horizon-1] - targets[:, :, horizon-1]) / targets[:, :, horizon-1])),
+                f'{key_prefix}/mae-{horizon}': torch.mean(torch.abs(pred[..., horizon-1] - targets[..., horizon-1])),
+                f'{key_prefix}/rmse-{horizon}': torch.sqrt(torch.mean((pred[..., horizon-1] - targets[..., horizon-1])**2)),
+                f'{key_prefix}/mape-{horizon}': 100*torch.mean(torch.abs((pred[..., horizon-1] - targets[..., horizon-1]) / targets[..., horizon-1])),
             }
 
         metrics = {}
