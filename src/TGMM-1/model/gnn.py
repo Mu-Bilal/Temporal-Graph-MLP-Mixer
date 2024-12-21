@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_geometric.nn as gnn
+from einops import rearrange
 
 from model.elements import MLP
 
@@ -8,11 +9,11 @@ BN = True
 
 
 class GCNConv(nn.Module):
-    def __init__(self, nin, nout, bias=True):
+    def __init__(self, nin, nout, bias=True, **kwargs):
         super().__init__()
         # self.nn = MLP(nin, nout, 2, False, bias=bias)
         # self.layer = gnn.GCNConv(nin, nin, bias=True)
-        self.layer = gnn.GCNConv(nin, nout, bias=bias)
+        self.layer = gnn.GCNConv(nin, nout, bias=bias, **kwargs)
 
     def reset_parameters(self):
         self.layer.reset_parameters()
@@ -23,9 +24,9 @@ class GCNConv(nn.Module):
 
 
 class ResGatedGraphConv(nn.Module):
-    def __init__(self, nin, nout, bias=True):
+    def __init__(self, nin, nout, bias=True, **kwargs):
         super().__init__()
-        self.layer = gnn.ResGatedGraphConv(nin, nout, bias=bias)
+        self.layer = gnn.ResGatedGraphConv(nin, nout, bias=bias, **kwargs)
 
     def reset_parameters(self):
         self.layer.reset_parameters()
@@ -35,10 +36,10 @@ class ResGatedGraphConv(nn.Module):
 
 
 class GINEConv(nn.Module):
-    def __init__(self, nin, nout, bias=True):
+    def __init__(self, nin, nout, bias=True, **kwargs):
         super().__init__()
         self.nn = MLP(nin, nout, 2, False, bias=bias)
-        self.layer = gnn.GINEConv(self.nn, train_eps=True)
+        self.layer = gnn.GINEConv(self.nn, train_eps=True, **kwargs)
 
     def reset_parameters(self):
         self.layer.reset_parameters()
@@ -48,10 +49,10 @@ class GINEConv(nn.Module):
 
 
 class TransformerConv(nn.Module):
-    def __init__(self, nin, nout, bias=True, nhead=8):
+    def __init__(self, nin, nout, bias=True, nhead=8, **kwargs):
         super().__init__()
         self.layer = gnn.TransformerConv(
-            in_channels=nin, out_channels=nout//nhead, heads=nhead, edge_dim=nin, bias=bias)
+            in_channels=nin, out_channels=nout//nhead, heads=nhead, edge_dim=nin, bias=bias, **kwargs)
 
     def reset_parameters(self):
         self.layer.reset_parameters()
@@ -61,9 +62,9 @@ class TransformerConv(nn.Module):
 
 
 class GATConv(nn.Module):
-    def __init__(self, nin, nout, bias=True, nhead=1):
+    def __init__(self, nin, nout, bias=True, nhead=1, **kwargs):
         super().__init__()
-        self.layer = gnn.GATConv(nin, nout//nhead, nhead, bias=bias)
+        self.layer = gnn.GATConv(nin, nout//nhead, nhead, bias=bias, **kwargs)
 
     def reset_parameters(self):
         self.layer.reset_parameters()
@@ -73,9 +74,9 @@ class GATConv(nn.Module):
 
 
 class GatedGraphConv(nn.Module):
-    def __init__(self, nin, nout, bias=True):
+    def __init__(self, nin, nout, bias=True, **kwargs):
         super().__init__()
-        self.layer = gnn.GatedGraphConv(nin, nout, bias=bias)
+        self.layer = gnn.GatedGraphConv(nin, nout, bias=bias, **kwargs)
 
     def reset_parameters(self):
         self.layer.reset_parameters()
@@ -117,7 +118,9 @@ class GNN(nn.Module):
         previous_x = x
         for layer, norm in zip(self.convs, self.norms):
             x = layer(x, edge_index, edge_attr)
+            x = rearrange(x, 'B n f -> (B n) f')  # batch, nodes, features FIXME: Fix this for additional time dim
             x = norm(x)
+            x = rearrange(x, '(B n) f -> B n f', n=previous_x.shape[1])
             x = F.relu(x)
             x = F.dropout(x, self.dropout, training=self.training)
             if self.res:

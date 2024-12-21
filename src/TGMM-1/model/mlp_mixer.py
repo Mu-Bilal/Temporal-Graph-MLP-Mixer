@@ -75,9 +75,9 @@ class MixerBlockTemporal(nn.Module):
         """
         self.token_mix = nn.Sequential(
             nn.LayerNorm(dim),
-            Rearrange('b t p d -> b t d p'),
+            Rearrange('B t p d -> B t d p'),
             FeedForward(num_patch, token_dim, dropout),
-            Rearrange('b t d p -> b t p d'),
+            Rearrange('B t d p -> B t p d'),
         )
         self.channel_mix = nn.Sequential(
             nn.LayerNorm(dim),
@@ -85,9 +85,9 @@ class MixerBlockTemporal(nn.Module):
         )
         self.temporal_mix = nn.Sequential(
             nn.LayerNorm(dim),
-            Rearrange('b t p d -> b p d t'),
+            Rearrange('B t p d -> B p d t'),
             FeedForward(num_timesteps, temporal_dim, dropout),
-            Rearrange('b p d t -> b t p d'),
+            Rearrange('B p d t -> B t p d'),
         )
 
     def forward(self, x):

@@ -158,43 +158,43 @@ class GMMModel(pl.LightningModule):
         assert data.features.shape[1] == self.num_timesteps
         assert data.targets.shape[1] == self.horizon
         assert data.num_nodes == self.n_nodes
+        features = data.features.permute(-1, -2)  # (n_timesteps, n_nodes)
 
-        all_mixer_x = torch.zeros(1, self.num_timesteps, self.n_patches, self.nhid)  # FIXME: Check if first dim (batch_size) is ever more than one?
-        for i in range(data.features.shape[1]):  # Iterate over past timesteps
-            # For each time step, encode the features
-            x = self.input_encoder(data.features[:, i].unsqueeze(-1))
-            # Node PE (positional encoding, either random walk or Laplacian eigenvectors, canonical choices for graphs)
-            if self.use_rw:
-                x += self.rw_encoder(data.rw_pos_enc)
-            if self.use_lap:
-                x += self.lap_encoder(data.lap_pos_enc)
-            edge_attr = data.edge_attr
-            if edge_attr is None:
-                edge_attr = data.edge_index.new_zeros(data.edge_index.size(-1), dtype=torch.float32)
-            edge_attr = self.edge_encoder(edge_attr.unsqueeze(-1))
+        x = self.input_encoder(features.unsqueeze(-1))
+        # Node PE (positional encoding, either random walk or Laplacian eigenvectors, canonical choices for graphs)
+        if self.use_rw:
+            x += self.rw_encoder(data.rw_pos_enc).unsqueeze(-3)  # Add time dimension
+        if self.use_lap:
+            x += self.lap_encoder(data.lap_pos_enc).unsqueeze(-3)  # Add time dimension
+        edge_attr = data.edge_attr
+        assert edge_attr is not None
+        # if edge_attr is None:
+        #     edge_attr = data.edge_index.new_zeros(data.edge_index.size(-1), dtype=torch.float32)
+        edge_attr = self.edge_encoder(edge_attr.unsqueeze(-1)).unsqueeze(-3).repeat(self.num_timesteps, 1, 1)  # Add time dimension
 
-            # Patch Encoder
-            x = x[data.subgraphs_nodes_mapper]
-            e = edge_attr[data.subgraphs_edges_mapper]
-            edge_index = data.combined_subgraphs
-            batch_x = data.subgraphs_batch
+        # Patch Encoder
+        x = x[:, data.subgraphs_nodes_mapper]
+        e = edge_attr[:, data.subgraphs_edges_mapper]
+        edge_index = data.combined_subgraphs
+        batch_x = data.subgraphs_batch
 
-            for i, gnn in enumerate(self.gnns):
-                if i > 0:
-                    subgraph = scatter(x, batch_x, dim=0, reduce=self.pooling)[batch_x]
-                    x = x + self.U[i-1](subgraph)
-                    x = scatter(x, data.subgraphs_nodes_mapper, dim=0, reduce='mean')[data.subgraphs_nodes_mapper]
-                x = gnn(x, edge_index, e)
-            subgraph_x = scatter(x, batch_x, dim=0, reduce=self.pooling)
+        for i, gnn in enumerate(self.gnns):
+            if i > 0:
+                # x: (n_timesteps, n_nodes, n_features); subgraph: (n_timesteps, n_patches, n_features)
+                subgraph = scatter(x, batch_x, dim=-2, reduce=self.pooling)[..., batch_x, :]
+                x = x + self.U[i-1](subgraph)
+                x = scatter(x, data.subgraphs_nodes_mapper, dim=-2, reduce='mean')[..., data.subgraphs_nodes_mapper, :]
+            x = gnn(x, edge_index, e)
+        subgraph_x = scatter(x, batch_x, dim=-2, reduce=self.pooling)  # (n_timesteps, n_patches, n_features)
 
-            # Patch PE
-            if self.patch_rw_dim > 0:
-                subgraph_x += self.patch_rw_encoder(data.patch_pe)
-            mixer_x = self.reshape_patchpe(subgraph_x)
-            all_mixer_x[0, i, :, :] = mixer_x  # TODO: Check if mixer_x does indeed have batch_size (first dim) = 0
+        # Patch PE
+        if self.patch_rw_dim > 0:
+            subgraph_x += self.patch_rw_encoder(data.patch_pe)
+        # mixer_x = rearrange(subgraph_x, 'B p f -> B p d', p=self.n_patches)
+        subgraph_x = subgraph_x.unsqueeze(0)  # QUICKFIX: Add batch dimension explicitely
 
         # MLPMixer
-        mixer_x = self.transformer_encoder(all_mixer_x, None, None)
+        mixer_x = self.transformer_encoder(subgraph_x, None, None)
 
         # Decoding / Readout
         out = self.readout(mixer_x, data)
