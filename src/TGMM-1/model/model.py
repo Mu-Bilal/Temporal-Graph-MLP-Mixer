@@ -60,7 +60,7 @@ class SingleNodeReadout(nn.Module):
         self.subgraph_count = data_example.subgraphs_batch.max() + 1
         self.patch_node_map = [data_example.subgraphs_nodes_mapper[data_example.subgraphs_batch == i] for i in range(self.subgraph_count)]
 
-        self.mlp = MLP(in_dim, out_dim, nlayer=2, with_final_activation=False)
+        self.mlp = MLP(in_dim, out_dim, nlayer=1, with_final_activation=False)
 
     def forward(self, mixer_x, data):
         """
@@ -82,7 +82,7 @@ class SingleNodeReadout(nn.Module):
         mixer_x = rearrange(mixer_x, 'B t p f -> (p B) t f')
         mixer_x_nodes = scatter(mixer_x[data.subgraphs_batch], data.subgraphs_nodes_mapper, dim=0, reduce='mean')
         mixer_x_nodes = rearrange(mixer_x_nodes, '(n B) t f -> B n (t f)', B=data.num_graphs)
-        mlp_in = torch.cat([passthrough, mixer_x_nodes], dim=-1)
+        mlp_in = torch.cat([passthrough, mixer_x_nodes], dim=-1)  # (batch_size, n_nodes, n_timesteps*nhid + n_timesteps)
         mlp_out = self.mlp(mlp_in)
         out = rearrange(mlp_out, 'B n h -> (B n) h')
         return out

@@ -28,7 +28,7 @@ model:
   gMHA_type: MLPMixer  # GraphMLPMixer or graph-based multihead attention: [MLPMixer, Hadamard, Standard, Graph, Addictive, Kernel]
   hidden_size: 64  # Hidden size of the model
   nlayer_gnn: 4  # Number of gnn layers
-  nlayer_mlpmixer: 8  # Number of mlp mixer layers
+  nlayer_mlpmixer: 6  # Number of mlp mixer layers
   pool: mean  # Pooling type for generating graph/subgraph embedding from node embeddings
   residual: true  # Use residual connection
 
@@ -43,6 +43,6 @@ pos_enc:
 metis:
   enable: true  # Enable Metis partition (otherwise use random partition)
   online: true  # Enable data augmentation
-  n_patches: 10  # The number of partitions
+  n_patches: 100  # The number of partitions
   drop_rate: 0  # Whether to randomly drop a set of edges before each metis partition
   num_hops: 1  # expanding patches with k hop neighbourhood

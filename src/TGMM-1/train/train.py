@@ -18,11 +18,8 @@ def train_model(cfg):
     model = GMMModel(cfg, train_loader.dataset[0])
 
     # Set up logging
-    logger = WandbLogger(
-        save_dir='./logs',
-        project='GMM-1',
-        entity='Temporal-GMM'
-    )
+    logger = WandbLogger(save_dir='./logs', project='GMM-1', entity='Temporal-GMM')
+    logger.log_hyperparams(OmegaConf.to_container(cfg))
 
     trainer = pl.Trainer(
         max_epochs=cfg.train.epochs,
