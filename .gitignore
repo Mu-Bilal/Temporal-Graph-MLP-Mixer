@@ -3,7 +3,7 @@ ZINC/
 logs/
 lightning_logs/
 checkpoints/
-
+wandb/
 data/
 **/data/
 src/**/data/

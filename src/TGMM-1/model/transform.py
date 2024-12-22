@@ -1,7 +1,5 @@
 import torch
-from torch_geometric.data import Data
-import torch_geometric
-import re
+
 
 from model.subgraph_extractors import metis_subgraph, random_subgraph
 from model.positional_encoding import RWSE, LapPE, random_walk
@@ -49,8 +47,7 @@ def combine_subgraphs(edge_index, subgraphs_nodes, subgraphs_edges, num_selected
     
     # Create mapping matrix to relabel nodes
     node_label_mapper = edge_index.new_full((num_selected, num_nodes), -1)
-    node_label_mapper[subgraphs_nodes[0], subgraphs_nodes[1]
-                      ] = torch.arange(len(subgraphs_nodes[1]))
+    node_label_mapper[subgraphs_nodes[0], subgraphs_nodes[1]] = torch.arange(len(subgraphs_nodes[1]))
     node_label_mapper = node_label_mapper.reshape(-1)
 
     # Offset node IDs by subgraph index * num_nodes to ensure unique IDs
@@ -60,29 +57,6 @@ def combine_subgraphs(edge_index, subgraphs_nodes, subgraphs_edges, num_selected
     # Apply node relabeling
     combined_subgraphs = node_label_mapper[combined_subgraphs]
     return combined_subgraphs
-
-
-class SubgraphsData(Data):
-    """Data class for handling subgraph batching and concatenation"""
-    def __inc__(self, key, value, *args, **kwargs):
-        num_nodes = self.num_nodes
-        num_edges = self.edge_index.size(-1)
-        if bool(re.search('(combined_subgraphs)', key)):
-            return getattr(self, key[:-len('combined_subgraphs')]+'subgraphs_nodes_mapper').size(0)
-        elif bool(re.search('(subgraphs_batch)', key)):
-            return 1+getattr(self, key)[-1]
-        elif bool(re.search('(nodes_mapper)', key)):
-            return num_nodes
-        elif bool(re.search('(edges_mapper)', key)):
-            return num_edges
-        else:
-            return super().__inc__(key, value, *args, **kwargs)
-
-    def __cat_dim__(self, key, value, *args, **kwargs):
-        if bool(re.search('(combined_subgraphs)', key)):
-            return -1
-        else:
-            return super().__cat_dim__(key, value, *args, **kwargs)
 
 
 class PositionalEncodingTransform(object):
@@ -123,7 +97,6 @@ class GraphPartitionTransform(object):
         RW = A * Dinv
         M = RW
         M_power = M
-        # Iterate
         for _ in range(self.patch_num_diff-1):
             M_power = torch.matmul(M_power, M)
         return M_power
@@ -137,11 +110,6 @@ class GraphPartitionTransform(object):
         3. Handles diffusion between partitions
         4. Creates masks and mappings for subgraph processing
         """
-        if isinstance(data, torch_geometric.data.data.Data):
-            data = SubgraphsData(**{k: v for k, v in data.items()})
-        else:
-            # FIXME: Make this dynamic; Temporarily removed features and targets
-            data = SubgraphsData(edge_index=data.edge_index, edge_weight=data.edge_weight, num_nodes=data.num_nodes, rw_pos_enc=data.rw_pos_enc, edge_attr=data.edge_attr)
         if self.metis:
             node_masks, edge_masks = metis_subgraph(
                 data, n_patches=self.n_patches, drop_rate=self.drop_rate, num_hops=self.num_hops, is_directed=self.is_directed)

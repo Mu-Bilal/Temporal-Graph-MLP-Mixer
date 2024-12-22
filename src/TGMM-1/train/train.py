@@ -5,25 +5,24 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from omegaconf import OmegaConf
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.profilers import SimpleProfiler, AdvancedProfiler
 
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from model.dataset import create_dataloaders_new
+from model.dataset import create_dataloaders
 from model.model import GMMModel
 
 
 def train_model(cfg):
     # Create dataloaders
-    train_loader, val_loader, test_loader, topo_data = create_dataloaders_new(cfg)
+    train_loader, val_loader, _, topo_data = create_dataloaders(cfg)
     
     # Create model
     model = GMMModel(cfg, topo_data)
 
     # Set up logging
-    logger = WandbLogger(save_dir='logs', project='GMM-1', entity='Temporal-GMM')
+    os.makedirs(os.getcwd(), exist_ok=True)
+    logger = WandbLogger(save_dir=os.getcwd(), project='GMM-1', entity='Temporal-GMM')
     logger.log_hyperparams(OmegaConf.to_container(cfg))
-    # logger = None
 
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
@@ -44,7 +43,6 @@ def train_model(cfg):
         log_every_n_steps=min(50, len(train_loader)),
         gradient_clip_val=5.0,
         callbacks=[checkpoint_callback],
-        # profiler=AdvancedProfiler(dirpath='profiling', filename='profiling1.txt'),
     )
     
     trainer.fit(

@@ -4,76 +4,10 @@ import torch
 from torch_scatter import scatter
 from einops import rearrange
 from model.mlp_mixer import MLPMixerTemporal
-import pandas as pd
 
 from model.elements import MLP
 from model.gnn import GNN
-
-
-
-class CompletePatchReadout(nn.Module):
-    """
-    Uses a seperate MLP to decode each patch to all its nodes.
-    """
-    def __init__(self, nhid, n_patches, timesteps, nout, horizon, data_example):  # FIXME: Nout = nout*nNodes but here nout=1; Dont actually pass the whole data_example!
-        super().__init__()
-
-        self.mlps = []
-        self.nparams = 0
-        for i, patch_node_cnt in enumerate(pd.Series(data_example.subgraphs_batch).value_counts(sort=False)): 
-            mlp = nn.Linear(nhid*timesteps, patch_node_cnt*horizon)  # in: Data from batch (n_timesteps*n_features) -> out: (n_nodes_per_THIS_patch, horizon)
-            self.mlps.append(mlp)
-            self.nparams += (nhid*timesteps+1)*patch_node_cnt*horizon
-        
-        print(f"Readout param count: {self.nparams}")
-        self.subgraph_count = data_example.subgraphs_batch.max()
-        self.patch_node_map = [data_example.subgraphs_nodes_mapper[data_example.subgraphs_batch == i] for i in range(self.subgraph_count)]
-        self.horizon = horizon
-        self.n_nodes = data_example.num_nodes
-
-    def forward(self, x, data):
-        x = rearrange(x, 'B t p f -> B p (t f)')
-
-        out_all = torch.zeros(x.shape[0], self.n_nodes, self.horizon)
-        for i, (mlp, patch_node_map) in enumerate(zip(self.mlps, self.patch_node_map)):  # TODO: Use scatter for this instead?
-            out_patch = mlp(x[:, i, :])
-            out_reshaped = rearrange(out_patch, 'B (n h) -> B n h', h=self.horizon)
-            out_all[:, patch_node_map, :] = out_reshaped
-
-        out_all = rearrange(out_all, 'B n h -> (n B) h')
-        return out_all
-    
-
-class SingleNodeReadout(nn.Module):
-    """
-    Uses a single MLP a patch + node input to the node output.
-    """
-    def __init__(self, nhid, n_patches, timesteps, nout, horizon, topo_data):
-        super().__init__()
-
-        in_dim = nhid*timesteps + timesteps
-        out_dim = horizon
-        self.horizon = horizon
-        self.n_nodes = topo_data.num_nodes
-
-        # Following are for a whole batch, i.e. subgraph_count = batch_size * n_patches
-        self.subgraph_count = topo_data.subgraphs_batch.max() + 1
-        self.patch_node_map = [topo_data.subgraphs_nodes_mapper[topo_data.subgraphs_batch == i] for i in range(self.subgraph_count)]
-
-        self.mlp = MLP(in_dim, out_dim, nlayer=4, with_final_activation=False)
-
-    def forward(self, mixer_x, x, topo_data):
-        """
-        mixer_x: (batch_size, n_timesteps, n_patches, nhid)
-        topo_data: CustomTemporalData
-
-        For each node, we have a single MLP that takes the patch + node input and outputs the node output.
-        """
-        mixer_x_nodes = scatter(mixer_x[..., topo_data.subgraphs_batch, :], topo_data.subgraphs_nodes_mapper, dim=-2, reduce='mean')
-        mixer_x_nodes = rearrange(mixer_x_nodes, 'B t n f -> B n (t f)')
-        mlp_in = torch.cat([x, mixer_x_nodes], dim=-1)  # (batch_size, n_nodes, n_timesteps*nhid + n_timesteps)
-        out = self.mlp(mlp_in)  # mlp_out: (batch_size, n_nodes*horizon); mlp_in: (batch_size, n_timesteps*nhid + n_timesteps)
-        return out  # (batch_size, n_nodes, horizon)
+from model.readouts import SingleNodeReadout
 
 
 class GMMModel(pl.LightningModule):
@@ -123,8 +57,6 @@ class GMMModel(pl.LightningModule):
 
         self.transformer_encoder = MLPMixerTemporal(nhid=self.nhid, dropout=self.mlpmixer_dropout, nlayer=self.nlayer_mlpmixer, n_patches=self.n_patches, n_timesteps=self.window)
         self.readout = SingleNodeReadout(self.nhid, self.n_patches, self.window, self.n_nodes, self.horizon, self.topo_data)
-        # torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
-
 
         # Test run: Simple LSTM per node
         # nhid = 256
@@ -139,15 +71,11 @@ class GMMModel(pl.LightningModule):
             x += self.rw_encoder(self.topo_data.rw_pos_enc).unsqueeze(-3)  # Add time dimension
         if self.use_lap:
             x += self.lap_encoder(self.topo_data.lap_pos_enc).unsqueeze(-3)  # Add time dimension
-        edge_attr = self.topo_data.edge_attr
-        assert edge_attr is not None
-        # if edge_attr is None:
-        #     edge_attr = data.edge_index.new_zeros(data.edge_index.size(-1), dtype=torch.float32)
-        edge_attr = self.edge_encoder(edge_attr.unsqueeze(-1)).unsqueeze(0).unsqueeze(0).repeat(x.shape[0], x.shape[1], 1, 1)  # Add time dimension
+        edge_weight = self.edge_encoder(self.topo_data.edge_weight.unsqueeze(-1)).unsqueeze(0).unsqueeze(0).repeat(x.shape[0], x.shape[1], 1, 1)  # Add time dimension
 
         # Patch Encoder
         x = x[..., self.topo_data.subgraphs_nodes_mapper, :]
-        e = edge_attr[..., self.topo_data.subgraphs_edges_mapper, :]
+        e = edge_weight[..., self.topo_data.subgraphs_edges_mapper, :]
         edge_index = self.topo_data.combined_subgraphs
         batch_x = self.topo_data.subgraphs_batch
 

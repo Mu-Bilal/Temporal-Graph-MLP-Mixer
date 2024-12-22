@@ -8,7 +8,7 @@ logfile: null  # Custom log file name
 # Training options
 train:
   batch_size: 1  # Total graph mini-batch size
-  epochs: 400  # Maximal number of epochs
+  epochs: 10  # Maximal number of epochs
   lr: 3e-4  # Base learning rate
   lr_patience: 10  # number of steps before reduce learning rate
   lr_decay: 0.2  # learning rate decay factor
@@ -42,7 +42,6 @@ pos_enc:
 # Metis patch extraction options
 metis:
   enable: true  # Enable Metis partition (otherwise use random partition)
-  online: true  # Enable data augmentation
+  online: false  # Enable data augmentation
   n_patches: 100  # The number of partitions
-  drop_rate: 0  # Whether to randomly drop a set of edges before each metis partition
   num_hops: 1  # expanding patches with k hop neighbourhood
