@@ -60,7 +60,7 @@ class SingleNodeReadout(nn.Module):
         self.subgraph_count = data_example.subgraphs_batch.max() + 1
         self.patch_node_map = [data_example.subgraphs_nodes_mapper[data_example.subgraphs_batch == i] for i in range(self.subgraph_count)]
 
-        self.mlp = MLP(in_dim, out_dim, nlayer=1, with_final_activation=False)
+        self.mlp = MLP(in_dim, out_dim, nlayer=4, with_final_activation=False)
 
     def forward(self, mixer_x, data):
         """
@@ -70,12 +70,7 @@ class SingleNodeReadout(nn.Module):
         For each node, we have a single MLP that takes the patch + node input and outputs the node output.
 
         Currently assuming that each batch is complete (using drop_last=True in dataloader).
-
-        mlp_out: (batch_size, n_nodes*horizon)
-        mlp_in: (batch_size, n_timesteps*nhid + n_timesteps)
-        b.features.shape: torch.Size([6624, 12]) (batch_size*n_nodes, n_timesteps)
         FIXME: Currently using seperate batch dimension but actually have to convert for both patch -> node and for final result. Change?
-        FIXME: Nodes that are part of two patches? Use scatter?
         """
         passthrough = rearrange(data.features, '(B n) t -> B n t', B=data.num_graphs)
 
@@ -83,7 +78,7 @@ class SingleNodeReadout(nn.Module):
         mixer_x_nodes = scatter(mixer_x[data.subgraphs_batch], data.subgraphs_nodes_mapper, dim=0, reduce='mean')
         mixer_x_nodes = rearrange(mixer_x_nodes, '(n B) t f -> B n (t f)', B=data.num_graphs)
         mlp_in = torch.cat([passthrough, mixer_x_nodes], dim=-1)  # (batch_size, n_nodes, n_timesteps*nhid + n_timesteps)
-        mlp_out = self.mlp(mlp_in)
+        mlp_out = self.mlp(mlp_in)  # mlp_out: (batch_size, n_nodes*horizon); mlp_in: (batch_size, n_timesteps*nhid + n_timesteps)
         out = rearrange(mlp_out, 'B n h -> (B n) h')
         return out
 
@@ -133,7 +128,7 @@ class GMMModel(pl.LightningModule):
         self.horizon = cfg.train.horizon
         self.n_nodes = data_example.num_nodes
         self.transformer_encoder = MLPMixerTemporal(nhid=self.nhid, dropout=self.mlpmixer_dropout, nlayer=self.nlayer_mlpmixer, n_patches=self.n_patches, n_timesteps=self.window)
-        self.readout = CompletePatchReadout(self.nhid, self.n_patches, self.window, self.n_nodes, self.horizon, data_example)
+        self.readout = SingleNodeReadout(self.nhid, self.n_patches, self.window, self.n_nodes, self.horizon, data_example)
         # torch.nn.Linear(nhid*self.n_patches*self.num_timesteps, self.n_nodes*self.horizon)
 
     def forward(self, data):
@@ -244,7 +239,7 @@ class GMMModel(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "valid/loss",
+                "monitor": self.cfg.train.monitor,
                 "interval": "epoch",
                 "frequency": 1,
             },

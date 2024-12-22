@@ -20,7 +20,10 @@ def create_train_val_test_split(dataset, max_len: int = None, train_size: float 
     val_size_abs = int(val_size * total_snapshots)
 
     train_data = dataset[:train_size_abs]
-    val_data = dataset[train_size_abs:train_size_abs+val_size_abs]
+    if val_size_abs > 0:
+        val_data = dataset[train_size_abs:train_size_abs+val_size_abs]
+    else:
+        val_data = None
 
     if train_size_abs+val_size_abs < total_snapshots:
         test_data = dataset[train_size_abs+val_size_abs:total_snapshots]
@@ -135,8 +138,11 @@ def create_dataloaders(cfg: OmegaConf):
     train_data = CustomTemporalDataset(train_data, graph_transform=[pre_transform, transform_train])
     train_loader = DataLoader(train_data, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers, drop_last=True)
 
-    val_data = CustomTemporalDataset(val_data, graph_transform=[pre_transform, transform_eval])
-    val_loader = DataLoader(val_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers, drop_last=True)
+    if val_data is not None:
+        val_data = CustomTemporalDataset(val_data, graph_transform=[pre_transform, transform_eval])
+        val_loader = DataLoader(val_data, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.num_workers, drop_last=True)
+    else:
+        val_loader = None
 
     if test_data is not None:
         test_data = CustomTemporalDataset(test_data, graph_transform=[pre_transform, transform_eval])
