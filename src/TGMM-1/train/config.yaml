@@ -1,14 +1,14 @@
 # Basic options
 dataset: METRLA  # Dataset name
-num_workers: 2  # Additional num of worker for data loading
+num_workers: 8  # Additional num of worker for data loading
 device: cpu  # Cuda device number, used for machine with multiple gpus
 seed: null  # Whether fix the running seed to remove randomness
 logfile: null  # Custom log file name
 
 # Training options
 train:
-  batch_size: 4  # Total graph mini-batch size
-  epochs: 1000  # Maximal number of epochs
+  batch_size: 1  # Total graph mini-batch size
+  epochs: 400  # Maximal number of epochs
   lr: 3e-4  # Base learning rate
   lr_patience: 10  # number of steps before reduce learning rate
   lr_decay: 0.2  # learning rate decay factor
@@ -18,7 +18,7 @@ train:
   mlpmixer_dropout: 0.0  # Dropout rate for MLPMixer
   min_lr: 1.0e-5  # A lower bound on the learning rate.
   max_len: 1  # Maximal number of timesteps in the dataset
-  train_size: 4  # Train size
+  train_size: 1  # Train size
   val_size: 0  # Validation size
   horizon: 12  # Number of timesteps to predict
   window: 12  # Number of timesteps to use for prediction
@@ -26,7 +26,7 @@ train:
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options
   gMHA_type: MLPMixer  # GraphMLPMixer or graph-based multihead attention: [MLPMixer, Hadamard, Standard, Graph, Addictive, Kernel]
-  hidden_size: 64  # Hidden size of the model
+  hidden_size: 96  # Hidden size of the model
   nlayer_gnn: 4  # Number of gnn layers
   nlayer_mlpmixer: 6  # Number of mlp mixer layers
   pool: mean  # Pooling type for generating graph/subgraph embedding from node embeddings

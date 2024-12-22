@@ -140,8 +140,8 @@ class GraphPartitionTransform(object):
         if isinstance(data, torch_geometric.data.data.Data):
             data = SubgraphsData(**{k: v for k, v in data.items()})
         else:
-            # FIXME: Make this dynamic
-            data = SubgraphsData(edge_index=data.edge_index, edge_weight=data.edge_weight, num_nodes=data.num_nodes, features=data.features, targets=data.targets, rw_pos_enc=data.rw_pos_enc, edge_attr=data.edge_attr)
+            # FIXME: Make this dynamic; Temporarily removed features and targets
+            data = SubgraphsData(edge_index=data.edge_index, edge_weight=data.edge_weight, num_nodes=data.num_nodes, rw_pos_enc=data.rw_pos_enc, edge_attr=data.edge_attr)
         if self.metis:
             node_masks, edge_masks = metis_subgraph(
                 data, n_patches=self.n_patches, drop_rate=self.drop_rate, num_hops=self.num_hops, is_directed=self.is_directed)

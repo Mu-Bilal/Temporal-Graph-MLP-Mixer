@@ -118,9 +118,9 @@ class GNN(nn.Module):
         previous_x = x
         for layer, norm in zip(self.convs, self.norms):
             x = layer(x, edge_index, edge_attr)
-            x = rearrange(x, 'B n f -> (B n) f')  # batch, nodes, features FIXME: Fix this for additional time dim
+            x = rearrange(x, 'B t n f -> (B t n) f')  # batch, nodes, features FIXME: Fix this for additional time dim
             x = norm(x)
-            x = rearrange(x, '(B n) f -> B n f', n=previous_x.shape[1])
+            x = rearrange(x, '(B t n) f -> B t n f', B=previous_x.shape[0], t=previous_x.shape[1])
             x = F.relu(x)
             x = F.dropout(x, self.dropout, training=self.training)
             if self.res:

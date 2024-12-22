@@ -2,7 +2,7 @@ dataset/
 ZINC/
 logs/
 lightning_logs/
-
+checkpoints/
 
 data/
 **/data/
