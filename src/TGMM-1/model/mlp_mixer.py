@@ -1,34 +1,18 @@
 import torch.nn as nn
 from einops.layers.torch import Rearrange
 
-
-BN = True
-
-
-class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout=0.):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Dropout(dropout),
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim)
-        )
-
-    def forward(self, x):
-        return self.net(x)
+from model.elements import FeedForward
 
 
 class MixerBlock(nn.Module):
-
     def __init__(self, dim, num_patch, token_dim, channel_dim, dropout=0.):
         super().__init__()
+
         self.token_mix = nn.Sequential(
             nn.LayerNorm(dim),
-            Rearrange('b p d -> b d p'),
+            Rearrange('B p d -> B d p'),
             FeedForward(num_patch, token_dim, dropout),
-            Rearrange('b d p -> b p d'),
+            Rearrange('B d p -> B p d'),
         )
         self.channel_mix = nn.Sequential(
             nn.LayerNorm(dim),
@@ -41,14 +25,9 @@ class MixerBlock(nn.Module):
         return x
 
 class MLPMixer(nn.Module):
-    def __init__(self,
-                 nhid,
-                 nlayer,
-                 n_patches,
-                 dropout=0,
-                 with_final_norm=True
-                 ):
+    def __init__(self, nhid, nlayer, n_patches, dropout=0, with_final_norm=True):
         super().__init__()
+
         self.n_patches = n_patches
         self.with_final_norm = with_final_norm
         self.mixer_blocks = nn.ModuleList(
@@ -56,7 +35,7 @@ class MLPMixer(nn.Module):
         if self.with_final_norm:
             self.layer_norm = nn.LayerNorm(nhid)
 
-    def forward(self, x, coarsen_adj, mask):
+    def forward(self, x):
         for mixer_block in self.mixer_blocks:
             x = mixer_block(x)
         if self.with_final_norm:
@@ -66,7 +45,7 @@ class MLPMixer(nn.Module):
 
 class MixerBlockTemporal(nn.Module):
 
-    def __init__(self, dim, num_patch, num_timesteps, token_dim, channel_dim, temporal_dim, dropout=0.):
+    def __init__(self, n_features, n_spatial, n_timesteps, spatial_hiddim, features_hiddim, temporal_hiddim, dropout=0.):
         super().__init__()
         """
         Note that nn.Linear and hence FeedForward only work on the last dimension of the input tensor, 
@@ -74,20 +53,20 @@ class MixerBlockTemporal(nn.Module):
         apply the transformation to the last dimension.
         """
         self.token_mix = nn.Sequential(
-            nn.LayerNorm(dim),
-            Rearrange('B t p d -> B t d p'),
-            FeedForward(num_patch, token_dim, dropout),
-            Rearrange('B t d p -> B t p d'),
+            nn.LayerNorm(n_features),
+            Rearrange('B t s f -> B t f s'),  # (batch, time, space, features)
+            FeedForward(n_spatial, spatial_hiddim, dropout),
+            Rearrange('B t f s -> B t s f'),
         )
         self.channel_mix = nn.Sequential(
-            nn.LayerNorm(dim),
-            FeedForward(dim, channel_dim, dropout),
+            nn.LayerNorm(n_features),
+            FeedForward(n_features, features_hiddim, dropout),
         )
         self.temporal_mix = nn.Sequential(
-            nn.LayerNorm(dim),
-            Rearrange('B t p d -> B p d t'),
-            FeedForward(num_timesteps, temporal_dim, dropout),
-            Rearrange('B p d t -> B t p d'),
+            nn.LayerNorm(n_features),
+            Rearrange('B t s f -> B s f t'),
+            FeedForward(n_timesteps, temporal_hiddim, dropout),
+            Rearrange('B s f t -> B t s f'),
         )
 
     def forward(self, x):
@@ -100,24 +79,20 @@ class MixerBlockTemporal(nn.Module):
         return x
 
 class MLPMixerTemporal(nn.Module):
-    def __init__(self,
-                 nhid,
-                 nlayer,
-                 n_patches,
-                 n_timesteps,
-                 dropout=0,
-                 with_final_norm=True
-                 ):
+    def __init__(self, n_features, n_spatial, n_timesteps, n_layer, dropout=0, with_final_norm=True):
         super().__init__()
-        self.n_patches = n_patches
+
+        self.n_spatial = n_spatial
         self.n_timesteps = n_timesteps
         self.with_final_norm = with_final_norm
-        self.mixer_blocks = nn.ModuleList(
-            [MixerBlockTemporal(nhid, self.n_patches, self.n_timesteps, nhid*4, nhid//2, self.n_timesteps, dropout=dropout) for _ in range(nlayer)])  # FIXME: Check what to use for temporal_dim.
+        self.mixer_blocks = nn.ModuleList([
+            MixerBlockTemporal(n_features, n_spatial, n_timesteps, n_features*4, n_spatial*2, n_timesteps*2, dropout=dropout)  # FIXME: Check what to use for hidden dims
+            for _ in range(n_layer)
+        ])  
         if self.with_final_norm:
-            self.layer_norm = nn.LayerNorm(nhid)
+            self.layer_norm = nn.LayerNorm(n_features)
 
-    def forward(self, x, coarsen_adj, mask):
+    def forward(self, x):
         for mixer_block in self.mixer_blocks:
             x = mixer_block(x)
         if self.with_final_norm:

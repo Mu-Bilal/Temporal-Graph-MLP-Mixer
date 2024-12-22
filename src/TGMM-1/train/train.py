@@ -54,5 +54,5 @@ def train_model(cfg):
 if __name__ == '__main__':
     cfg = OmegaConf.load('/Users/luis/Desktop/ETH/Courses/AS24-DL/Project/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/config.yaml')
     cfg = OmegaConf.merge(cfg, OmegaConf.load('/Users/luis/Desktop/ETH/Courses/AS24-DL/Project/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/metrla.yaml'))
-    assert cfg.dataset == 'METRLA'
+    assert cfg.dataset.name == 'METRLA'
     train_model(cfg)

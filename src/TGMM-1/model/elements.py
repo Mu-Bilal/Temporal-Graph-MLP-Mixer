@@ -1,12 +1,24 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import global_add_pool
 
-BN = True
+
+class FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout=0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim)
+        )
+
+    def forward(self, x):
+        return self.net(x)
 
 
 class MLP(nn.Module):
-    def __init__(self, nin, nout, nlayer=2, with_final_activation=True, with_norm=BN, bias=True):
+    def __init__(self, nin, nout, nlayer=2, with_final_activation=True, with_norm=True, bias=True):
         super().__init__()
         n_hid = nin
         self.layers = nn.ModuleList([nn.Linear(nin if i == 0 else n_hid,

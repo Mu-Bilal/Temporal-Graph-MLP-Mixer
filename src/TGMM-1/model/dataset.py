@@ -34,20 +34,20 @@ class StaticGraphTopologyData(object):
 
 
 def split_dataset(cfg: OmegaConf, dataset):
-    assert cfg.train.train_size + cfg.train.val_size <= 1, "Train size and validation size must sum to no more than 1"
-    sizes_rel = np.array([cfg.train.train_size, cfg.train.val_size, 1-cfg.train.train_size-cfg.train.val_size])
-    length = min(cfg.train.max_len, len(dataset))
+    assert cfg.dataset.train_size + cfg.dataset.val_size <= 1, "Train size and validation size must sum to no more than 1"
+    sizes_rel = np.array([cfg.dataset.train_size, cfg.dataset.val_size, 1-cfg.dataset.train_size-cfg.dataset.val_size])
+    length = min(cfg.dataset.max_len, len(dataset)) if cfg.dataset.max_len is not None else len(dataset)
     sizes_abs = sizes_rel * length
     return torch.utils.data.random_split(Subset(dataset, range(length)), sizes_abs)
 
 def create_dataloaders(cfg: OmegaConf):
-    assert cfg.dataset == 'METRLA', "Only METRLA dataset is supported currently"
+    assert cfg.dataset.name == 'METRLA', "Only METRLA dataset is supported currently"
 
     # Load data
     ssl._create_default_https_context = ssl._create_unverified_context  # Fix for SSL verification error
     loader = METRLADatasetLoader(raw_data_dir=os.path.join(os.getcwd(), 'data', 'METRLA'))
     loader._get_edges_and_weights()
-    loader._generate_task(cfg.train.window, cfg.train.horizon)
+    loader._generate_task(cfg.dataset.window, cfg.dataset.horizon)
 
     # Dynamic
     x = np.stack(loader.features)[:, :, 0, :]
@@ -56,10 +56,10 @@ def create_dataloaders(cfg: OmegaConf):
     dataset = DynamicNodeDataset(x, y)
     train_dataset, val_dataset, test_dataset = split_dataset(cfg, dataset)
 
-    train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers, drop_last=True, pin_memory=True, persistent_workers=True)
-    val_loader = DataLoader(val_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
+    train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.dataset.num_workers, drop_last=True, pin_memory=True, persistent_workers=True)
+    val_loader = DataLoader(val_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.dataset.num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
         if len(val_dataset) > 0 else None
-    test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
+    test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.dataset.num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
         if len(test_dataset) > 0 else None
 
     # Static

@@ -10,29 +10,28 @@ class SingleNodeReadout(nn.Module):
     """
     Uses a single MLP a patch + node input to the node output.
     """
-    def __init__(self, nhid, timesteps, horizon, topo_data, n_layers):
+    def __init__(self, n_features_patch, n_features_node, timesteps, horizon, topo_data, n_layers):
         super().__init__()
 
-        in_dim = nhid*timesteps + timesteps
+        in_dim = n_features_patch*timesteps + n_features_node*timesteps
         out_dim = horizon
-        self.horizon = horizon
-        self.n_nodes = topo_data.num_nodes
 
-        # Following are for a whole batch, i.e. subgraph_count = batch_size * n_patches
-        self.subgraph_count = topo_data.subgraphs_batch.max() + 1
-        self.patch_node_map = [topo_data.subgraphs_nodes_mapper[topo_data.subgraphs_batch == i] for i in range(self.subgraph_count)]
+        self.subgraphs_nodes_mapper = topo_data.subgraphs_nodes_mapper
+        self.subgraphs_batch = topo_data.subgraphs_batch
 
         self.mlp = MLP(in_dim, out_dim, nlayer=n_layers, with_final_activation=False)
 
-    def forward(self, mixer_x, x, topo_data):
+    def forward(self, patch_x, nodes_x):
         """
-        mixer_x: (batch_size, n_timesteps, n_patches, nhid)
+        patch_x: (batch_size, n_timesteps, n_patches, n_features_patch)
+        nodes_x: (batch_size, n_timesteps, n_nodes, n_features_node)
         topo_data: CustomTemporalData
 
         For each node, we have a single MLP that takes the patch + node input and outputs the node output.
         """
-        mixer_x_nodes = scatter(mixer_x[..., topo_data.subgraphs_batch, :], topo_data.subgraphs_nodes_mapper, dim=-2, reduce='mean')
-        mixer_x_nodes = rearrange(mixer_x_nodes, 'B t n f -> B n (t f)')
-        mlp_in = torch.cat([x, mixer_x_nodes], dim=-1)  # (batch_size, n_nodes, n_timesteps*nhid + n_timesteps)
-        out = self.mlp(mlp_in)  # mlp_out: (batch_size, n_nodes*horizon); mlp_in: (batch_size, n_timesteps*nhid + n_timesteps)
+        patch_x_nodes = scatter(patch_x[..., self.subgraphs_batch, :], self.subgraphs_nodes_mapper, dim=-2, reduce='mean')
+        patch_x_nodes = rearrange(patch_x_nodes, 'B t n f -> B n (t f)')
+        nodes_x = rearrange(nodes_x, 'B t n f -> B n (t f)')
+        mlp_in = torch.cat([nodes_x, patch_x_nodes], dim=-1)  # (batch_size, n_nodes, n_timesteps*n_features_node + n_timesteps*n_features_patch)
+        out = self.mlp(mlp_in)  # mlp_out: (batch_size, n_nodes*horizon); mlp_in: (batch_size, n_timesteps*n_features_node + n_timesteps*n_features_patch)
         return out  # (batch_size, n_nodes, horizon)
