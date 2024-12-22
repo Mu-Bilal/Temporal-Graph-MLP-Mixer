@@ -15,48 +15,38 @@ class GMMModel(pl.LightningModule):
     def __init__(self, cfg, topo_data):
         super().__init__()
         assert cfg.metis.n_patches > 0
-
-        self.bn = True
-        self.res = True
-
         self.cfg = cfg
-        self.nhid = cfg.model.hidden_size
-        self.n_patches = cfg.metis.n_patches
-        self.nlayer_gnn = cfg.model.nlayer_gnn
-        self.nlayer_mlpmixer = cfg.model.nlayer_mlpmixer
-        self.gnn_type = cfg.model.gnn_type
-        self.pooling = cfg.model.pool
-        self.dropout = cfg.train.dropout
-        self.mlpmixer_dropout = cfg.train.mlpmixer_dropout
-        self.rw_dim = cfg.pos_enc.rw_dim
-        self.lap_dim = cfg.pos_enc.lap_dim
-        self.patch_rw_dim = cfg.pos_enc.patch_rw_dim
-        self.use_rw = self.rw_dim > 0
-        self.use_lap = self.lap_dim > 0
-
         self.topo_data = topo_data
         self.criterion = torch.nn.L1Loss()  # MAE
-        self.window = cfg.train.window
-        self.horizon = cfg.train.horizon
-        self.n_nodes = self.topo_data.num_nodes
 
-        if self.use_rw:
-            self.rw_encoder = MLP(self.rw_dim, self.nhid, 1)
-        if self.use_lap:
-            self.lap_encoder = MLP(self.lap_dim, self.nhid, 1)
-        if self.patch_rw_dim > 0:
-            self.patch_rw_encoder = MLP(self.patch_rw_dim, self.nhid, 1)
+        # Shortcuts
+        nhid = cfg.model.hidden_size
+        self.use_rw = cfg.pos_enc.rw_dim > 0
+        self.use_lap = cfg.pos_enc.lap_dim > 0
+        self.pooling = cfg.model.pool
+        self.patch_rw_dim = cfg.pos_enc.patch_rw_dim
 
-        self.input_encoder = nn.Linear(1, self.nhid)
-        self.edge_encoder = nn.Linear(1, self.nhid)
+        if cfg.pos_enc.rw_dim > 0:
+            self.rw_encoder = MLP(cfg.pos_enc.rw_dim, nhid, 1)
+        if cfg.pos_enc.lap_dim > 0:
+            self.lap_encoder = MLP(cfg.pos_enc.lap_dim, nhid, 1)
+        if cfg.pos_enc.patch_rw_dim > 0:
+            self.patch_rw_encoder = MLP(cfg.pos_enc.patch_rw_dim, nhid, 1)
 
-        self.gnns = nn.ModuleList([GNN(nin=self.nhid, nout=self.nhid, nlayer_gnn=1, gnn_type=self.gnn_type,
-                                  bn=self.bn, dropout=self.dropout, res=self.res) for _ in range(self.nlayer_gnn)])
-        self.U = nn.ModuleList([MLP(self.nhid, self.nhid, nlayer=1, with_final_activation=True) for _ in range(self.nlayer_gnn-1)])
+        self.input_encoder = nn.Linear(1, nhid)
+        self.edge_encoder = nn.Linear(1, nhid)
 
+        self.gnns = nn.ModuleList([
+            GNN(nin=nhid, nout=nhid, nlayer_gnn=1, gnn_type=cfg.model.gnn_type, bn=True, dropout=cfg.train.dropout, res=True)
+            for _ in range(cfg.model.nlayer_gnn)
+        ])
+        self.U = nn.ModuleList([
+            MLP(nhid, nhid, nlayer=1, with_final_activation=True)
+            for _ in range(cfg.model.nlayer_gnn-1)
+        ])
 
-        self.transformer_encoder = MLPMixerTemporal(nhid=self.nhid, dropout=self.mlpmixer_dropout, nlayer=self.nlayer_mlpmixer, n_patches=self.n_patches, n_timesteps=self.window)
-        self.readout = SingleNodeReadout(self.nhid, self.n_patches, self.window, self.n_nodes, self.horizon, self.topo_data)
+        self.transformer_encoder = MLPMixerTemporal(nhid=nhid, dropout=cfg.train.mlpmixer_dropout, nlayer=cfg.model.nlayer_mlpmixer, n_patches=cfg.metis.n_patches, n_timesteps=cfg.train.window)
+        self.readout = SingleNodeReadout(nhid, cfg.train.window, cfg.train.horizon, self.topo_data, n_layers=2)
 
         # Test run: Simple LSTM per node
         # nhid = 256
@@ -66,11 +56,6 @@ class GMMModel(pl.LightningModule):
     def forward(self, x):
         x_raw = x
         x = rearrange(self.input_encoder(x.unsqueeze(-1)), 'B n t f -> B t n f')
-        # Node PE (positional encoding, either random walk or Laplacian eigenvectors, canonical choices for graphs)
-        if self.use_rw:
-            x += self.rw_encoder(self.topo_data.rw_pos_enc).unsqueeze(-3)  # Add time dimension
-        if self.use_lap:
-            x += self.lap_encoder(self.topo_data.lap_pos_enc).unsqueeze(-3)  # Add time dimension
         edge_weight = self.edge_encoder(self.topo_data.edge_weight.unsqueeze(-1)).unsqueeze(0).unsqueeze(0).repeat(x.shape[0], x.shape[1], 1, 1)  # Add time dimension
 
         # Patch Encoder
@@ -87,10 +72,6 @@ class GMMModel(pl.LightningModule):
                 x = scatter(x, self.topo_data.subgraphs_nodes_mapper, dim=-2, reduce='mean')[..., self.topo_data.subgraphs_nodes_mapper, :]
             x = gnn(x, edge_index, e)
         subgraph_x = scatter(x, self.topo_data.subgraphs_batch, dim=-2, reduce=self.pooling)  # (n_timesteps, n_patches, n_features)
-
-        # Patch PE
-        if self.patch_rw_dim > 0:
-            subgraph_x += self.patch_rw_encoder(self.topo_data.patch_pe)
 
         # MLPMixer
         mixer_x = self.transformer_encoder(subgraph_x, None, None)

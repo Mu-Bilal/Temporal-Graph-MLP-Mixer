@@ -8,9 +8,9 @@ logfile: null  # Custom log file name
 # Training options
 train:
   batch_size: 1  # Total graph mini-batch size
-  epochs: 10  # Maximal number of epochs
+  epochs: 300  # Maximal number of epochs
   lr: 3e-4  # Base learning rate
-  lr_patience: 10  # number of steps before reduce learning rate
+  lr_patience: 20  # number of steps before reduce learning rate
   lr_decay: 0.2  # learning rate decay factor
   monitor: train/loss  # Metric to monitor
   wd: 0.0  # L2 regularization, weight decay

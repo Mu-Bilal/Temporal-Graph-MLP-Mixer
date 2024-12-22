@@ -10,7 +10,7 @@ class SingleNodeReadout(nn.Module):
     """
     Uses a single MLP a patch + node input to the node output.
     """
-    def __init__(self, nhid, n_patches, timesteps, nout, horizon, topo_data):
+    def __init__(self, nhid, timesteps, horizon, topo_data, n_layers):
         super().__init__()
 
         in_dim = nhid*timesteps + timesteps
@@ -22,7 +22,7 @@ class SingleNodeReadout(nn.Module):
         self.subgraph_count = topo_data.subgraphs_batch.max() + 1
         self.patch_node_map = [topo_data.subgraphs_nodes_mapper[topo_data.subgraphs_batch == i] for i in range(self.subgraph_count)]
 
-        self.mlp = MLP(in_dim, out_dim, nlayer=4, with_final_activation=False)
+        self.mlp = MLP(in_dim, out_dim, nlayer=n_layers, with_final_activation=False)
 
     def forward(self, mixer_x, x, topo_data):
         """

@@ -68,7 +68,7 @@ def create_dataloaders(cfg: OmegaConf):
     num_nodes = x.shape[1]
 
     topo_data = StaticGraphTopologyData(edges, edge_weights, num_nodes)
-    pre_transform = PositionalEncodingTransform(rw_dim=cfg.pos_enc.rw_dim, lap_dim=cfg.pos_enc.lap_dim)
+    # pre_transform = PositionalEncodingTransform(rw_dim=cfg.pos_enc.rw_dim, lap_dim=cfg.pos_enc.lap_dim)
     if cfg.metis.n_patches > 0:
         transform_train = GraphPartitionTransform(n_patches=cfg.metis.n_patches,
                                                     metis=cfg.metis.enable,
@@ -78,7 +78,7 @@ def create_dataloaders(cfg: OmegaConf):
                                                     patch_rw_dim=cfg.pos_enc.patch_rw_dim,
                                                     patch_num_diff=cfg.pos_enc.patch_num_diff)
         
-        topo_data = pre_transform(topo_data)
+        # topo_data = pre_transform(topo_data)
         topo_data = transform_train(topo_data)
 
     return train_loader, val_loader, test_loader, topo_data
