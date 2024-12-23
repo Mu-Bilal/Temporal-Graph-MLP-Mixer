@@ -8,8 +8,10 @@ dataset:
   max_len: 1
   train_size: 1
   val_size: 0
-  horizon: 12
-  window: 12
+  horizon: 36
+  window: 72
+  stride: 1
+  delay: 0
   num_workers: 8  # Additional num of worker for data loading
 
 train:
