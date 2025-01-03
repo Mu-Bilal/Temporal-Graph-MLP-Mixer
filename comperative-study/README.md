@@ -2,7 +2,7 @@
 This repository facilitates a comparative study of various deep learning spatio-temporal traffic prediction algorithms to examine how spatial and temporal inductive biases affect prediction on static graphs. It utilizes the same data loaders, metrics, and (where applicable) the same graph constructions to ensure fair comparisons. 
 
 This repository contains the following implementations:
-- **LSTM** LSTM for Time Series Forecasting
+- **LSTM** Long Short-Term Memory for Time Series Forecasting
 - **[DCRNN](https://arxiv.org/abs/1707.01926)** Diffusion Convolutional Recurrent Neural Network: Data-Driven Traffic Forecasting
 - **[Graph WaveNet](https://arxiv.org/abs/1906.00121)** Graph WaveNet for Deep Spatial-Temporal Graph Modeling
 - **[GMAN](https://arxiv.org/abs/1911.08415)** Graph Multi-Attention Network for Traffic Prediction
