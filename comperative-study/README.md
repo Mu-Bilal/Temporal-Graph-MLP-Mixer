@@ -1,5 +1,5 @@
 # Spatio-Temporal Traffic Prediction
-This repository helps perform a comparative study of different Deep Learning Spatio-Temporal Traffic Prediction algorithms under a single framework. It utilizes the same data loaders, metrics, and (where applicable) the same graph constructions to ensure fair comparisons. 
+This repository facilitates a comparative study of various deep learning spatio-temporal traffic prediction algorithms to examine how spatial and temporal inductive biases affect prediction on static graphs. It utilizes the same data loaders, metrics, and (where applicable) the same graph constructions to ensure fair comparisons. 
 
 This repository contains the following implementations:
 - **[DCRNN](https://arxiv.org/abs/1707.01926)** Diffusion Convolutional Recurrent Neural Network: Data-Driven Traffic Forecasting
@@ -33,9 +33,8 @@ python -m scripts.gen_adj_mx  --sensor_locations_filename=data/metr-la/graph_sen
 The world-coordinate locations of the sensors are available at `data/{metr-la|pems-bay}/graph_sensor_locations.csv`.
 
 
-## Model Training & Evaluation
+## Model Training
 ```
-# Training
 # Diffusion Convolutional Recurrent Neural Network
 python dcrnn_train_pytorch.py --config_filename=data/metr-la/configs/dcrnn_train_pytorch.yaml
 
@@ -47,8 +46,11 @@ python gwnet_train.py --lstm --data data/metr-la/metr-la.h5 --adjdata data/metr-
 
 # Graph Multi-Attention Network
 python gman_train.py --max_epoch 0 --SE_file data/metr-la/SE(METR-LA).txt --model_file data/metr-la/pretrained/GMAN_METR-LA --traffic_file data/metr-la/metr-la.h5
+```
 
-# Evaluation
+## Evaluation
+
+```
 # Diffusion Convolutional Recurrent Neural Network
 python dcrnn_test_pytorch.py --config_filename=data/metr-la/pretrained/dcrnn_test_pytorch.yaml
 
