@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ## Run the Pre-trained Model on METR-LA
 
-The generated prediction are stored in `data/{metr-la|pems-bay}/results/`.
+The generated prediction are stored in `data/metr-la/results/`.
 
 ## Graph Construction
 DCRNN requires pre-calculated road network distances, Graph Wavenet allows to compute them implicitly.
