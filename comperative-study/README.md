@@ -8,9 +8,7 @@ This repository contains the following implementations:
 For citation see below.
 
 
-## Results
-![Results obtained by reproducing architecture as described in the paper](https://github.com/tijsmaas/TrafficPrediction/blob/master/figures/reproduced_papers_results.png?raw=true)
-
+## Installation
 
 Dependency can be installed using the following command:
 ```bash
