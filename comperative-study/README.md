@@ -43,7 +43,7 @@ python dcrnn_train_pytorch.py --config_filename=data/metr-la/configs/dcrnn_train
 python gwnet_train.py --config data/metr-la/configs/graph_wavenet_train.yaml --data data/metr-la/metr-la.h5
 
 # LSTM
-python gwnet_train.py --lstm --data data/metr-la/metr-la.h5 --adjdata data/metr-la/adj_mx.pkl --seq_length 12 --nhid 256 --in_dim 2 --batch_size 64 --seed 42 --epochs 100 --save data/metr-la/models/fc_lstm --expid 1
+python gwnet_train.py --lstm --data data/metr-la/metr-la.h5 --adjdata data/metr-la/adj_mx.pkl --seq_length 12 --nhid 256 --in_dim 2 --batch_size 64 --seed 42 --epochs 500 --save data/metr-la/models/fc_lstm --expid 1
 
 # Graph Multi-Attention Network
 python gman_train.py --max_epoch 0 --SE_file data/metr-la/SE(METR-LA).txt --model_file data/metr-la/pretrained/GMAN_METR-LA --traffic_file data/metr-la/metr-la.h5
