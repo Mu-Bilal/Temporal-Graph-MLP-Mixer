@@ -122,7 +122,7 @@ def get_data_raw(cfg, root='/data'):
         edge_weight = loader.edge_weights
         n_nodes = x.shape[1]
     else:
-        raise ValueError(f"Dataset {cfg.dataset.name} not supported. Choose from: GraphMSO, PvUS, METRLA")
+        raise ValueError(f"Dataset {cfg.dataset.name} not supported. Choose from: GraphMSO, PvUS, EngRAD, METRLA")
 
     return x, y, edge_index, edge_weight, n_nodes
 
@@ -132,7 +132,6 @@ def split_dataset(cfg: OmegaConf, dataset):
     length = min(cfg.dataset.max_len, len(dataset)) if cfg.dataset.max_len is not None else len(dataset)
     sizes_abs = (sizes_rel * length).astype(int)
     return torch.utils.data.random_split(Subset(dataset, np.arange(sizes_abs.sum())), sizes_abs)
-
 
 def print_dataloaders_overview(cfg: OmegaConf, train_loader, val_loader, test_loader, topo_data):
     print("\nDataloaders and Topology Data Overview:")

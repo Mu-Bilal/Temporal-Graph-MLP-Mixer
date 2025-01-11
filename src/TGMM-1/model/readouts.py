@@ -8,7 +8,7 @@ from model.elements import MLP
 
 class SingleNodeReadout(nn.Module):
     """
-    Uses a single MLP a patch + node input to the node output.
+    Uses a single MLP for patch + node input to the node output.
     """
     def __init__(self, n_features_patch, n_features_node, timesteps, horizon, topo_data, n_layers):
         super().__init__()
