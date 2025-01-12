@@ -96,29 +96,20 @@ gnns = {
 
 
 class GNN(nn.Module):
-    def __init__(self,
-                 nin,
-                 nout,
-                 nlayer_gnn,
-                 gnn_type,
-                 bn=BN,
-                 dropout=0.0,
-                 res=True):
+    def __init__(self, nin, nout, nlayer_gnn, gnn_type, bn=BN, dropout=0.0, res=True):
         super().__init__()
         self.dropout = dropout
         self.res = res
 
-        self.convs = nn.ModuleList([gnns[gnn_type](
-            nin, nin, bias=not bn) for _ in range(nlayer_gnn)])
-        self.norms = nn.ModuleList(
-            [nn.BatchNorm1d(nin) if bn else nn.Identity() for _ in range(nlayer_gnn)])
+        self.convs = nn.ModuleList([gnns[gnn_type](nin, nin, bias=not bn) for _ in range(nlayer_gnn)])
+        self.norms = nn.ModuleList([nn.BatchNorm1d(nin) if bn else nn.Identity() for _ in range(nlayer_gnn)])
         self.output_encoder = nn.Linear(nin, nout)
 
     def forward(self, x, edge_index, edge_attr):
         previous_x = x
         for layer, norm in zip(self.convs, self.norms):
             x = layer(x, edge_index, edge_attr)
-            x = rearrange(x, 'B t n f -> (B t n) f')  # batch, nodes, features FIXME: Fix this for additional time dim
+            x = rearrange(x, 'B t n f -> (B t n) f')  # batch, nodes, features
             x = norm(x)
             x = rearrange(x, '(B t n) f -> B t n f', B=previous_x.shape[0], t=previous_x.shape[1])
             x = F.relu(x)

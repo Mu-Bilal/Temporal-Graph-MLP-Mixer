@@ -22,13 +22,16 @@ class MLP(nn.Module):
         super().__init__()
         n_hid = nin
         self.layers = nn.ModuleList([nn.Linear(nin if i == 0 else n_hid,
-                                     n_hid if i < nlayer-1 else nout,
-                                     # TODO: revise later
-                                               bias=True if (i == nlayer-1 and not with_final_activation and bias)
-                                               or (not with_norm) else False)  # set bias=False for BN
-                                     for i in range(nlayer)])
-        self.norms = nn.ModuleList([nn.LayerNorm(n_hid if i < nlayer-1 else nout) if with_norm else nn.Identity()
-                                    for i in range(nlayer)])
+            n_hid if i < nlayer-1 else nout,
+            bias=bias)  # Simplified bias logic - just use the bias parameter
+            for i in range(nlayer)
+        ])
+        self.norms = nn.ModuleList([
+            nn.LayerNorm(n_hid if i < nlayer-1 else nout) 
+            if (with_norm and i < nlayer-1 or (i == nlayer-1 and with_final_activation)) 
+            else nn.Identity()
+            for i in range(nlayer)
+        ])
         self.nlayer = nlayer
         self.with_final_activation = with_final_activation
         self.residual = (nin == nout)  # TODO: test whether need this
@@ -36,10 +39,11 @@ class MLP(nn.Module):
     def reset_parameters(self):
         for layer, norm in zip(self.layers, self.norms):
             layer.reset_parameters()
-            norm.reset_parameters()
+            if isinstance(norm, nn.LayerNorm):
+                norm.reset_parameters()
 
     def forward(self, x):
-        previous_x = x
+        # previous_x = x  # FIXME: Check why we are not using this??
         for i, (layer, norm) in enumerate(zip(self.layers, self.norms)):
             x = layer(x)
             if i < self.nlayer-1 or self.with_final_activation:

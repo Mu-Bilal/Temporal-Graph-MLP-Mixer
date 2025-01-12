@@ -27,3 +27,6 @@ cudnn-9.3.0.75       | 383.2 MB  | #############################################
 
 https://lightning.ai/docs/pytorch/stable/versioning.html
 https://github.com/pyg-team/pytorch_geometric/discussions/9023
+https://pytorch-geometric-temporal.readthedocs.io/en/latest/notes/installation.html
+https://pytorch.org/get-started/locally/
+https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html

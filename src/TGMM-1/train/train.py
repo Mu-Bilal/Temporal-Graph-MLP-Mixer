@@ -26,7 +26,7 @@ def train_model(cfg):
         num_workers = min(os.cpu_count(), 8)
         strategy = "auto"
         devices = 1  # Default to 1 if not running on SLURM or GPU count not specified
-    strategy, devices = SingleDeviceStrategy(), 1
+    # strategy, devices = SingleDeviceStrategy(), 1
     print(f"Using strategy: {strategy} and {devices} device(s)")
     
     # Create dataloaders
@@ -60,7 +60,7 @@ def train_model(cfg):
         log_every_n_steps=min(50, len(train_loader)),
         gradient_clip_val=5.0,
         callbacks=[checkpoint_callback],
-        strategy='auto',  # strategy
+        strategy=strategy,
         devices=devices
     )
     trainer.fit(model, train_loader, val_loader)
