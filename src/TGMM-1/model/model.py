@@ -8,6 +8,7 @@ from model.mlp_mixer import MLPMixerTemporal
 from model.elements import MLP
 from model.gnn import GNN
 from model.readouts import SingleNodeReadout
+from model.dataset import StaticGraphTopologyData
 
 
 class GMMModel(pl.LightningModule):
@@ -16,7 +17,7 @@ class GMMModel(pl.LightningModule):
         super().__init__()
         assert cfg.metis.n_patches > 0
         self.cfg = cfg
-        self.topo_data = topo_data
+        self.topo_data: StaticGraphTopologyData = topo_data
         self.criterion = torch.nn.L1Loss()  # MAE
 
         # Shortcuts 
@@ -58,8 +59,19 @@ class GMMModel(pl.LightningModule):
         # self.lstm = nn.LSTM(input_size=1, hidden_size=nhid, num_layers=4, batch_first=True)
         # self.readout2 = MLP(nhid, self.horizon, nlayer=3, with_final_activation=False)
 
+    def setup(self, stage):
+        self._move_tensors_to_device(self.topo_data)
+        self._move_tensors_to_device(self.readout)
+        
+    def _move_tensors_to_device(self, obj):
+        for attr_name in dir(obj):
+            if not attr_name.startswith('__'):  # Skip built-in attributes
+                attr = getattr(obj, attr_name)
+                if isinstance(attr, torch.Tensor):
+                    setattr(obj, attr_name, attr.to(self.device))
+    
     def forward(self, x):
-        x_raw = x
+        x_raw = x        
         x = rearrange(self.input_encoder_patch(x_raw.unsqueeze(-1)), 'B n t f -> B t n f')
         nodes_x = rearrange(self.input_encoder_node(x_raw.unsqueeze(-1)), 'B n t f -> B t n f')
         edge_weight = self.edge_encoder(self.topo_data.edge_weight.unsqueeze(-1)).unsqueeze(0).unsqueeze(0).repeat(x.shape[0], x.shape[1], 1, 1)  # Add time dimension

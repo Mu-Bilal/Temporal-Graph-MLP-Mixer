@@ -5,9 +5,9 @@ logfile: null  # Custom log file name
 
 dataset:
   name: METRLA
-  max_len: 1
-  train_size: 1
-  val_size: 0
+  max_len: 1000
+  train_size: 0.9
+  val_size: 0.1
   horizon: 36
   window: 72
   stride: 1
@@ -16,7 +16,7 @@ dataset:
   EngRADchannel: 0
 
 train:
-  batch_size: 1  # Total graph mini-batch size
+  batch_size: 16  # Total graph mini-batch size
   epochs: 50  # Maximal number of epochs
   lr: 3e-4  # Base learning rate
   lr_patience: 20  # number of steps before reduce learning rate
