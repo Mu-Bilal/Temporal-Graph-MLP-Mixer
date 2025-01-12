@@ -152,16 +152,16 @@ def print_dataloaders_overview(cfg: OmegaConf, train_loader, val_loader, test_lo
         print(f"Number of patches: {len(topo_data.patches)}")
     print("-" * 58)
 
-def create_dataloaders(cfg: OmegaConf, raw_data_dir=os.path.join(os.path.dirname(__file__), '../data')):
+def create_dataloaders(cfg: OmegaConf, raw_data_dir=os.path.join(os.path.dirname(__file__), '../data'), num_workers=4):
     x, y, edge_index, edge_weight, n_nodes = get_data_raw(cfg, raw_data_dir)
 
     dataset = DynamicNodeFeatureDataset(x, y)
     train_dataset, val_dataset, test_dataset = split_dataset(cfg, dataset)
 
-    train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=cfg.dataset.num_workers, drop_last=True, pin_memory=True, persistent_workers=True)
-    val_loader = DataLoader(val_dataset, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.dataset.num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
+    train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=num_workers, drop_last=True, pin_memory=True, persistent_workers=True)
+    val_loader = DataLoader(val_dataset, batch_size=cfg.train.batch_size, shuffle=False, num_workers=num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
         if len(val_dataset) > 0 else None
-    test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False, num_workers=cfg.dataset.num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
+    test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False, num_workers=num_workers, drop_last=True, pin_memory=True, persistent_workers=True) \
         if len(test_dataset) > 0 else None
 
     topo_data = StaticGraphTopologyData(edge_index, edge_weight, n_nodes)

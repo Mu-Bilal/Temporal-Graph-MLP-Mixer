@@ -1,17 +1,17 @@
-import pytorch_lightning as pl
+from lightning.pytorch import LightningModule
 import torch.nn as nn
 import torch
 from torch_scatter import scatter
 from einops import rearrange
 from model.mlp_mixer import MLPMixerTemporal
-
+from typing import List
 from model.elements import MLP
 from model.gnn import GNN
 from model.readouts import SingleNodeReadout
 from model.dataset import StaticGraphTopologyData
 
 
-class GMMModel(pl.LightningModule):
+class GMMModel(LightningModule):
 
     def __init__(self, cfg, topo_data):
         super().__init__()
@@ -19,6 +19,10 @@ class GMMModel(pl.LightningModule):
         self.cfg = cfg
         self.topo_data: StaticGraphTopologyData = topo_data
         self.criterion = torch.nn.L1Loss()  # MAE
+        
+        # Logging
+        self.train_step_metrics_buffer = []
+        self.valid_step_metrics_buffer = []
 
         # Shortcuts 
         self.pooling = cfg.model.pool
@@ -115,8 +119,7 @@ class GMMModel(pl.LightningModule):
         metrics = self.calc_metrics(y_pred, y, key_prefix='train')
         metrics.update({'train/loss': loss})
         metrics.update({'train/lr': self.optimizers().param_groups[0]['lr']})
-        self.log_dict(metrics)
-        return loss
+        return {'loss': loss, 'step_metrics': metrics}
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -125,8 +128,7 @@ class GMMModel(pl.LightningModule):
         metrics = self.calc_metrics(y_pred, y, key_prefix='valid')
         metrics.update({'valid/loss': loss})
         metrics.update({'valid/lr': self.optimizers().param_groups[0]['lr']})
-        self.log_dict(metrics)
-        return loss
+        return {'loss': loss, 'step_metrics': metrics}
     
     def calc_metrics(self, pred, targets, key_prefix='valid'):
 
@@ -160,3 +162,36 @@ class GMMModel(pl.LightningModule):
             },
         }
         
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        if torch.isnan(outputs['loss']):
+            raise ValueError("NaN detected in training loss")
+
+        # Store and log metrics every N steps
+        self.train_step_metrics_buffer.append(outputs['step_metrics'])
+        
+        if batch_idx % self.trainer.log_every_n_steps == 0:
+            self._log_from_buffer(self.train_step_metrics_buffer)
+
+    def on_validation_batch_end(self, outputs, batch, batch_idx):
+        # Store and log metrics every N steps
+        self.valid_step_metrics_buffer.append(outputs['step_metrics'])
+        
+        if batch_idx % self.trainer.log_every_n_steps == 0:
+            self._log_from_buffer(self.valid_step_metrics_buffer)
+
+    def on_validation_epoch_end(self):
+        self._log_from_buffer(self.valid_step_metrics_buffer)
+
+    def on_train_epoch_end(self) -> None:
+        self._log_from_buffer(self.train_step_metrics_buffer)
+        
+    def _log_from_buffer(self, buffer: List):
+        if len(buffer) == 0:
+            return
+
+        # Average the metrics over the last N steps
+        avg_metrics = {k: sum(step_dict[k] for step_dict in buffer) / len(buffer) for k in buffer[0]}
+
+        # Log the averaged metrics and clear the buffer
+        self.log_dict(avg_metrics, sync_dist=True)
+        buffer.clear()

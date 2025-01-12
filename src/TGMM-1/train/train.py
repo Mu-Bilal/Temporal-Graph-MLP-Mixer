@@ -1,12 +1,12 @@
 import sys
 import os
 import torch
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
+from lightning import Trainer
+from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.strategies import SingleDeviceStrategy, DDPStrategy
 from omegaconf import OmegaConf
-from pytorch_lightning.callbacks import ModelCheckpoint
 import wandb
-
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.dataset import create_dataloaders
@@ -14,8 +14,24 @@ from model.model import GMMModel
 
 
 def train_model(cfg):
+    # Dataloader and device setup
+    if 'SLURM_JOB_ID' in os.environ:  # Running distributed via SLURM
+        num_workers = int(os.environ['SLURM_CPUS_PER_TASK'])
+        devices = int(os.environ['SLURM_NNODES']) * int(os.environ['SLURM_NTASKS_PER_NODE'])
+        if devices > 1:
+            strategy = DDPStrategy(find_unused_parameters=False, process_group_backend="nccl")
+        else:
+            strategy = "auto"  # SingleDeviceStrategy()
+    else:
+        num_workers = min(os.cpu_count(), 8)
+        strategy = "auto"
+        devices = 1  # Default to 1 if not running on SLURM or GPU count not specified
+    strategy, devices = SingleDeviceStrategy(), 1
+    print(f"Using strategy: {strategy} and {devices} device(s)")
+    
     # Create dataloaders
-    train_loader, val_loader, _, topo_data = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data')
+    print(f"Creating dataloaders with {num_workers} workers")
+    train_loader, val_loader, _, topo_data = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=num_workers)
     
     # Create model
     model = GMMModel(cfg, topo_data)
@@ -37,24 +53,20 @@ def train_model(cfg):
     )
     
     torch.set_float32_matmul_precision('medium')
-    trainer = pl.Trainer(
+    trainer = Trainer(
         max_epochs=cfg.train.epochs,
-        accelerator='gpu',  # gpu' if torch.cuda.is_available() else 
-        devices=1,
         logger=logger,
         deterministic=True if cfg.seed else False,
         log_every_n_steps=min(50, len(train_loader)),
         gradient_clip_val=5.0,
         callbacks=[checkpoint_callback],
+        strategy='auto',  # strategy
+        devices=devices
     )
+    trainer.fit(model, train_loader, val_loader)
     
-    trainer.fit(
-        model,
-        train_dataloaders=train_loader,
-        val_dataloaders=val_loader
-    )
-
-    wandb.finish()
+    if trainer.is_global_zero:
+        wandb.finish()
 
 if __name__ == '__main__':
     cfg = OmegaConf.load('/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/config.yaml')

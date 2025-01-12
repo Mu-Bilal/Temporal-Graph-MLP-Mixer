@@ -12,7 +12,6 @@ dataset:
   window: 72
   stride: 1
   delay: 0
-  num_workers: 8  # Additional num of worker for data loading
   EngRADchannel: 0
 
 train:
