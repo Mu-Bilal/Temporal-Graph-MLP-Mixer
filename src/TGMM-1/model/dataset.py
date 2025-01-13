@@ -130,11 +130,20 @@ def get_data_raw(cfg, root='/data'):
     return x, y, edge_index, edge_weight, n_nodes, metadata
 
 def split_dataset(cfg: OmegaConf, dataset):
+    """
+    These are temporal datasets with overlap in windows and horizons. We need to create mutually disjoint subsets.
+    """
     assert cfg.dataset.train_size + cfg.dataset.val_size <= 1, "Train size and validation size must sum to no more than 1"
     sizes_rel = np.array([cfg.dataset.train_size, cfg.dataset.val_size, 1-cfg.dataset.train_size-cfg.dataset.val_size])
     length = min(cfg.dataset.max_len, len(dataset)) if cfg.dataset.max_len is not None else len(dataset)
     sizes_abs = (sizes_rel * length).astype(int)
-    return torch.utils.data.random_split(Subset(dataset, np.arange(sizes_abs.sum())), sizes_abs)
+    
+    # Create subsets
+    train_subset = Subset(dataset, np.arange(sizes_abs[0]))
+    val_subset = Subset(dataset, np.arange(sizes_abs[0], sizes_abs[0]+sizes_abs[1]))
+    test_subset = Subset(dataset, np.arange(sizes_abs[0]+sizes_abs[1], sizes_abs.sum()))
+    
+    return train_subset, val_subset, test_subset
 
 
 def print_dataloaders_overview(cfg: OmegaConf, train_loader, val_loader, test_loader, topo_data):
