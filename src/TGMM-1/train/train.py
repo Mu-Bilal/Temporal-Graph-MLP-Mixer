@@ -31,7 +31,7 @@ def train_model(cfg):
     
     # Create dataloaders
     print(f"Creating dataloaders with {num_workers} workers")
-    train_loader, val_loader, _, topo_data, metadata = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=num_workers)
+    train_loader, val_loader, test_loader, topo_data, metadata = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=num_workers)
     
     # Create model
     model = GMMModel(cfg, topo_data, metadata)
@@ -70,7 +70,9 @@ def train_model(cfg):
         strategy=strategy,
         devices=devices
     )
+    
     trainer.fit(model, train_loader, val_loader)
+    trainer.test(model, test_loader)
     
     if trainer.is_global_zero:
         wandb.finish()

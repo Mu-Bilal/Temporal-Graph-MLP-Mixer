@@ -145,7 +145,6 @@ def split_dataset(cfg: OmegaConf, dataset):
     
     return train_subset, val_subset, test_subset
 
-
 def print_dataloaders_overview(cfg: OmegaConf, train_loader, val_loader, test_loader, topo_data):
     print("\nDataloaders and Topology Data Overview:")
     print(f"Batch size: {cfg.train.batch_size}")
@@ -179,13 +178,15 @@ def create_dataloaders(cfg: OmegaConf, raw_data_dir=os.path.join(os.path.dirname
     topo_data = StaticGraphTopologyData(edge_index, edge_weight, n_nodes)
     # pre_transform = PositionalEncodingTransform(rw_dim=cfg.pos_enc.rw_dim, lap_dim=cfg.pos_enc.lap_dim)
     if cfg.metis.n_patches > 0:
-        transform_train = GraphPartitionTransform(n_patches=cfg.metis.n_patches,
-                                                    metis=cfg.metis.enable,
-                                                    drop_rate=0,
-                                                    num_hops=cfg.metis.num_hops,
-                                                    is_directed=False,
-                                                    patch_rw_dim=cfg.pos_enc.patch_rw_dim,
-                                                    patch_num_diff=cfg.pos_enc.patch_num_diff)
+        transform_train = GraphPartitionTransform(
+            n_patches=cfg.metis.n_patches,
+            metis=cfg.metis.enable,
+            drop_rate=0,
+            num_hops=cfg.metis.num_hops,
+            is_directed=False,
+            patch_rw_dim=cfg.pos_enc.patch_rw_dim,
+            patch_num_diff=cfg.pos_enc.patch_num_diff
+        )
         
         # topo_data = pre_transform(topo_data)
         topo_data = transform_train(topo_data)

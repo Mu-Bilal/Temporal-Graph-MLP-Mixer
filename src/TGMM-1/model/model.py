@@ -23,6 +23,7 @@ class GMMModel(LightningModule):
         # Logging
         self.train_step_metrics_buffer = []
         self.valid_step_metrics_buffer = []
+        self.test_step_metrics_buffer = []
         
         # Dataset unnormalisation (for reporting true-scale metrics)
         self.unnormalise = ('norm_mean' in metadata.keys() and 'norm_std' in metadata.keys())
@@ -60,7 +61,15 @@ class GMMModel(LightningModule):
             dropout=cfg.train.dropout_node_mixer,
             with_final_norm=True
         )
-        self.readout = SingleNodeReadout(cfg.model.nfeatures_patch, cfg.model.nfeatures_node, cfg.dataset.window, cfg.dataset.horizon, self.topo_data, n_layers=2, dropout=cfg.train.dropout_readout)
+        self.readout = SingleNodeReadout(
+            cfg.model.nfeatures_patch, 
+            cfg.model.nfeatures_node, 
+            cfg.dataset.window, 
+            cfg.dataset.horizon, 
+            self.topo_data, 
+            n_layers=cfg.model.nlayer_readout, 
+            dropout=cfg.train.dropout_readout
+        )
 
         # Test run: Simple LSTM per node
         # nhid = 256
@@ -133,6 +142,14 @@ class GMMModel(LightningModule):
         metrics.update({'valid/loss': loss})
         metrics.update({'valid/lr': self.optimizers().param_groups[0]['lr']})
         return {'loss': loss, 'step_metrics': metrics}
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_pred = self.forward(x)
+        loss = self.criterion(y_pred, y)
+        metrics = self.calc_metrics(y_pred, y, key_prefix='test', ignore_missing=True, missing_val=0)
+        metrics.update({'test/loss': loss})
+        return {'loss': loss, 'step_metrics': metrics}
     
     def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, key_prefix='valid', ignore_missing=False, missing_val=0):
         if self.unnormalise:
@@ -197,8 +214,18 @@ class GMMModel(LightningModule):
         if batch_idx % self.trainer.log_every_n_steps == 0:
             self._log_from_buffer(self.valid_step_metrics_buffer)
 
+    def on_test_batch_end(self, outputs, batch, batch_idx):
+        # Store and log metrics every N steps
+        self.test_step_metrics_buffer.append(outputs['step_metrics'])
+        
+        if batch_idx % self.trainer.log_every_n_steps == 0:
+            self._log_from_buffer(self.test_step_metrics_buffer)
+    
     def on_validation_epoch_end(self):
         self._log_from_buffer(self.valid_step_metrics_buffer)
+
+    def on_test_epoch_end(self):
+        self._log_from_buffer(self.test_step_metrics_buffer)
 
     def on_train_epoch_end(self) -> None:
         self._log_from_buffer(self.train_step_metrics_buffer)
