@@ -18,7 +18,7 @@ class FeedForward(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, nin, nout, nlayer=2, with_final_activation=True, with_norm=True, bias=True):
+    def __init__(self, nin, nout, nlayer=2, with_final_activation=True, with_norm=True, bias=True, dropout=0.):
         super().__init__()
         n_hid = nin
         self.layers = nn.ModuleList([nn.Linear(nin if i == 0 else n_hid,
@@ -32,6 +32,13 @@ class MLP(nn.Module):
             else nn.Identity()
             for i in range(nlayer)
         ])
+        
+        if isinstance(dropout, (int, float)):
+            dropout = [dropout] * nlayer
+        assert len(dropout) == nlayer, f"Expected {nlayer} dropout values, got {len(dropout)}"
+        
+        self.dropouts = nn.ModuleList([nn.Dropout(drop) for drop in dropout])
+        
         self.nlayer = nlayer
         self.with_final_activation = with_final_activation
         self.residual = (nin == nout)  # TODO: test whether need this
@@ -44,7 +51,8 @@ class MLP(nn.Module):
 
     def forward(self, x):
         # previous_x = x  # FIXME: Check why we are not using this??
-        for i, (layer, norm) in enumerate(zip(self.layers, self.norms)):
+        for i, (layer, norm, dropout) in enumerate(zip(self.layers, self.norms, self.dropouts)):
+            x = dropout(x)
             x = layer(x)
             if i < self.nlayer-1 or self.with_final_activation:
                 x = norm(x)

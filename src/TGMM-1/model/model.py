@@ -36,7 +36,7 @@ class GMMModel(LightningModule):
         self.edge_encoder = nn.Linear(1, cfg.model.nfeatures_patch)
 
         self.gnns = nn.ModuleList([
-            GNN(nin=cfg.model.nfeatures_patch, nout=cfg.model.nfeatures_patch, nlayer_gnn=1, gnn_type=cfg.model.gnn_type, bn=True, dropout=cfg.train.dropout, res=True)
+            GNN(nin=cfg.model.nfeatures_patch, nout=cfg.model.nfeatures_patch, nlayer_gnn=1, gnn_type=cfg.model.gnn_type, bn=True, dropout=cfg.train.dropout_gnn, res=True)
             for _ in range(cfg.model.nlayer_gnn)
         ])
         self.U = nn.ModuleList([
@@ -49,7 +49,7 @@ class GMMModel(LightningModule):
             n_spatial=cfg.metis.n_patches,
             n_timesteps=cfg.dataset.window,
             n_layer=cfg.model.nlayer_patch_mixer,
-            dropout=cfg.train.mlpmixer_dropout,
+            dropout=cfg.train.dropout_patch_mixer,
             with_final_norm=True
         )
         self.mixer_node = MLPMixerTemporal(
@@ -57,10 +57,10 @@ class GMMModel(LightningModule):
             n_spatial=self.topo_data.num_nodes,
             n_timesteps=cfg.dataset.window,
             n_layer=cfg.model.nlayer_node_mixer,  
-            dropout=cfg.train.mlpmixer_dropout,
+            dropout=cfg.train.dropout_node_mixer,
             with_final_norm=True
         )
-        self.readout = SingleNodeReadout(cfg.model.nfeatures_patch, cfg.model.nfeatures_node, cfg.dataset.window, cfg.dataset.horizon, self.topo_data, n_layers=2)
+        self.readout = SingleNodeReadout(cfg.model.nfeatures_patch, cfg.model.nfeatures_node, cfg.dataset.window, cfg.dataset.horizon, self.topo_data, n_layers=2, dropout=cfg.train.dropout_readout)
 
         # Test run: Simple LSTM per node
         # nhid = 256
@@ -163,7 +163,7 @@ class GMMModel(LightningModule):
         return metrics
     
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.cfg.train.lr, weight_decay=self.cfg.train.wd)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.cfg.train.lr, weight_decay=self.cfg.train.wd)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode='min',
             factor=self.cfg.train.lr_decay,

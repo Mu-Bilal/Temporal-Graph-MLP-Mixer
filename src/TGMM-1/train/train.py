@@ -3,8 +3,8 @@ import os
 import torch
 from lightning import Trainer
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.strategies import SingleDeviceStrategy, DDPStrategy
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from lightning.pytorch.strategies import DDPStrategy
 from omegaconf import OmegaConf
 import wandb
 
@@ -52,6 +52,13 @@ def train_model(cfg):
         save_weights_only=True
     )
     
+    early_stop_callback = EarlyStopping(
+        monitor=cfg.train.monitor,
+        mode='min',
+        patience=cfg.train.early_stop_patience,
+        verbose=True
+    )
+    
     torch.set_float32_matmul_precision('medium')
     trainer = Trainer(
         max_epochs=cfg.train.epochs,
@@ -59,7 +66,7 @@ def train_model(cfg):
         deterministic=True if cfg.seed else False,
         log_every_n_steps=min(50, len(train_loader)),
         gradient_clip_val=5.0,
-        callbacks=[checkpoint_callback],
+        callbacks=[checkpoint_callback, early_stop_callback],
         strategy=strategy,
         devices=devices
     )
