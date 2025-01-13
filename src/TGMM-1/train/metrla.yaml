@@ -4,7 +4,7 @@ logfile: null  # Custom log file name
 
 dataset:
   name: METRLA
-  max_len: 5000
+  max_len: null
   train_size: 0.9
   val_size: 0.1
   horizon: 12

@@ -120,7 +120,7 @@ class GMMModel(LightningModule):
         x, y = batch
         y_pred = self.forward(x)  # (batch_size, n_nodes*n_timesteps)
         loss = self.criterion(y_pred, y)
-        metrics = self.calc_metrics(y_pred, y, key_prefix='train')
+        metrics = self.calc_metrics(y_pred, y, key_prefix='train', ignore_missing=True, missing_val=0)
         metrics.update({'train/loss': loss})
         metrics.update({'train/lr': self.optimizers().param_groups[0]['lr']})
         return {'loss': loss, 'step_metrics': metrics}
@@ -129,24 +129,34 @@ class GMMModel(LightningModule):
         x, y = batch
         y_pred = self.forward(x)
         loss = self.criterion(y_pred, y)
-        metrics = self.calc_metrics(y_pred, y, key_prefix='valid')
+        metrics = self.calc_metrics(y_pred, y, key_prefix='valid', ignore_missing=True, missing_val=0)
         metrics.update({'valid/loss': loss})
         metrics.update({'valid/lr': self.optimizers().param_groups[0]['lr']})
         return {'loss': loss, 'step_metrics': metrics}
     
-    def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, key_prefix='valid'):
+    def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, key_prefix='valid', ignore_missing=False, missing_val=0):
         if self.unnormalise:
             pred = pred * self.metadata['norm_std'] + self.metadata['norm_mean']
             targets = targets * self.metadata['norm_std'] + self.metadata['norm_mean']
 
-        
         def calc_metrics_for_horizon(pred: torch.Tensor, targets: torch.Tensor, horizon: int):
-            return {
-                f'{key_prefix}/mae-{horizon}': torch.mean(torch.abs(pred[..., horizon-1] - targets[..., horizon-1])),
-                f'{key_prefix}/rmse-{horizon}': torch.sqrt(torch.mean((pred[..., horizon-1] - targets[..., horizon-1])**2)),
-                f'{key_prefix}/mape-{horizon}': 100*torch.mean(torch.abs((pred[..., horizon-1] - targets[..., horizon-1]) / targets[..., horizon-1])),
-            }
+            pred = pred[..., horizon-1]
+            targets = targets[..., horizon-1]
+            
+            if ignore_missing:
+                missing_mask = (targets == missing_val)
+                pred = pred[~missing_mask]
+                targets = targets[~missing_mask]
 
+            mae = torch.mean(torch.abs(pred - targets))
+            rmse = torch.sqrt(torch.mean((pred - targets)**2))
+            mape = 100*torch.mean(torch.abs((pred - targets) / targets))
+            
+            return {
+                f'{key_prefix}/mae-{horizon}': mae,
+                f'{key_prefix}/rmse-{horizon}': rmse, 
+                f'{key_prefix}/mape-{horizon}': mape,
+            }
         metrics = {}
         for horizon in [3, 6, 12]:
             metrics.update(calc_metrics_for_horizon(pred, targets, horizon))
