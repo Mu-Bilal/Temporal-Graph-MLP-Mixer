@@ -9,7 +9,7 @@ from model.elements import MLP
 from model.gnn import GNN
 from model.readouts import SingleNodeReadout
 from model.dataset import StaticGraphTopologyData
-from typing import Dict
+from typing import Dict, Union
 
 class GMMModel(LightningModule):
 
@@ -156,9 +156,14 @@ class GMMModel(LightningModule):
             pred = pred * self.metadata['norm_std'] + self.metadata['norm_mean']
             targets = targets * self.metadata['norm_std'] + self.metadata['norm_mean']
 
-        def calc_metrics_for_horizon(pred: torch.Tensor, targets: torch.Tensor, horizon: int):
-            pred = pred[..., horizon-1]
-            targets = targets[..., horizon-1]
+        def calc_metrics_for_horizon(pred: torch.Tensor, targets: torch.Tensor, horizon: Union[int, str]):
+            if isinstance(horizon, int):
+                pred = pred[..., horizon-1]
+                targets = targets[..., horizon-1]
+            elif horizon == 'all':
+                pass
+            else:
+                raise ValueError(f'Invalid horizon: {horizon}')
             
             if ignore_missing:
                 missing_mask = (targets == missing_val)
@@ -175,7 +180,7 @@ class GMMModel(LightningModule):
                 f'{key_prefix}/mape-{horizon}': mape,
             }
         metrics = {}
-        for horizon in [3, 6, 12]:
+        for horizon in [3, 6, 12, 'all']:
             metrics.update(calc_metrics_for_horizon(pred, targets, horizon))
         return metrics
     

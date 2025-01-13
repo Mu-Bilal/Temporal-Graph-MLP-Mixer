@@ -1,13 +1,13 @@
-project: GMM-MetrLA  # For WandB
+project: GMM-GraphMSO  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
 dataset:
-  name: METRLA
+  name: GraphMSO
   max_len: null
   train_size: 0.7
   val_size: 0.1
-  horizon: 12
-  window: 12
+  horizon: 36
+  window: 72
   stride: 1
   delay: 0
   EngRADchannel: 0
@@ -24,11 +24,11 @@ train:
 
   monitor: valid/loss  # Metric to monitor
 
-  wd: 2e-1  # L2 regularization, weight decay
-  dropout_gnn: 0.6  # Dropout rate
-  dropout_readout: 0.6  # Dropout rate for Readout
-  dropout_patch_mixer: 0.6  # Dropout rate for patch MLPMixer
-  dropout_node_mixer: 0.6  # Dropout rate for node MLPMixer
+  wd: 0  # L2 regularization, weight decay
+  dropout_gnn: 0  # Dropout rate
+  dropout_readout: 0  # Dropout rate for Readout
+  dropout_patch_mixer: 0  # Dropout rate for patch MLPMixer
+  dropout_node_mixer: 0  # Dropout rate for node MLPMixer
 
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options

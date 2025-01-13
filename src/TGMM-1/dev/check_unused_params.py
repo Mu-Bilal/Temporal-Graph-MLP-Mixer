@@ -13,7 +13,7 @@ def single_forward_backward():
 
     print('Loading config...')
     cfg = OmegaConf.load('src/TGMM-1/train/config.yaml')
-    cfg = OmegaConf.merge(cfg, OmegaConf.load('src/TGMM-1/train/metrla.yaml'))
+    cfg = OmegaConf.merge(cfg, OmegaConf.load('src/TGMM-1/train/graphmso.yaml'))
     
     # Override config values
     cfg.train.batch_size = 2

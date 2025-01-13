@@ -39,7 +39,7 @@ def train_model(cfg):
     # Set up logging
     logging_path = '/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/wandb_logs'
     os.makedirs(logging_path, exist_ok=True)
-    logger = WandbLogger(save_dir=logging_path, project='GMM-1', entity='Temporal-GMM')
+    logger = WandbLogger(save_dir=logging_path, project=cfg.project, entity='Temporal-GMM')
     logger.log_hyperparams(OmegaConf.to_container(cfg))
 
     checkpoint_callback = ModelCheckpoint(
@@ -72,12 +72,15 @@ def train_model(cfg):
     )
     
     trainer.fit(model, train_loader, val_loader)
-    trainer.test(model, test_loader)
     
     if trainer.is_global_zero:
         wandb.finish()
 
 if __name__ == '__main__':
-    cfg = OmegaConf.load('/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/config.yaml')
-    cfg = OmegaConf.merge(cfg, OmegaConf.load('/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/metrla.yaml'))
+    dataset = 'graphmso'
+    
+    cfg = OmegaConf.merge(
+        OmegaConf.load('/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/config.yaml'), 
+        OmegaConf.load(f'/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/{dataset}.yaml')
+    )
     train_model(cfg)
