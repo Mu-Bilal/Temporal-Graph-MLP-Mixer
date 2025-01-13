@@ -1,0 +1,17 @@
+program: src/TGMM-1/sweep/train_wrapper.py
+method: bayes
+metric:
+  name: valid/loss
+  goal: minimize
+parameters:
+  nfeatures_patch: 
+    values: [16, 32, 64]  # Number of features for patch mixer
+  nfeatures_node: 
+    values: [8, 16, 32, 64]  # Number of features for node mixer
+
+  nlayer_gnn: 
+    values: [1, 2, 3]  # Number of gnn layers  FIXME: Check if receptive field is enough
+  nlayer_patch_mixer: 
+    values: [1, 2, 3]  # Number of mlp mixer layers
+  nlayer_node_mixer: 
+    values: [1, 2, 3] # Number of mlp mixer layers
