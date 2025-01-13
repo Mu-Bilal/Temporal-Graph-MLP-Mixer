@@ -1,11 +1,10 @@
 # Basic options
-device: cpu  # Cuda device number, used for machine with multiple gpus
 seed: null  # Whether fix the running seed to remove randomness
 logfile: null  # Custom log file name
 
 dataset:
   name: METRLA
-  max_len: 1000
+  max_len: 5000
   train_size: 0.9
   val_size: 0.1
   horizon: 36
@@ -16,14 +15,14 @@ dataset:
 
 train:
   batch_size: 16  # Total graph mini-batch size
-  epochs: 50  # Maximal number of epochs
-  lr: 3e-4  # Base learning rate
+  epochs: 100  # Maximal number of epochs
+  lr: 1e-3  # Base learning rate
   lr_patience: 20  # number of steps before reduce learning rate
   lr_decay: 0.2  # learning rate decay factor
   monitor: train/loss  # Metric to monitor
   min_lr: 1.0e-5  # A lower bound on the learning rate.
 
-  wd: 0.0  # L2 regularization, weight decay
+  wd: 1e-5  # L2 regularization, weight decay
   dropout: 0.0  # Dropout rate
   mlpmixer_dropout: 0.0  # Dropout rate for MLPMixer
 
@@ -32,9 +31,9 @@ model:
   gMHA_type: MLPMixer  # GraphMLPMixer or graph-based multihead attention: [MLPMixer, Hadamard, Standard, Graph, Addictive, Kernel]
   nfeatures_patch: 64  # Number of features for patch mixer
   nfeatures_node: 8  # Number of features for node mixer
-  nlayer_gnn: 3  # Number of gnn layers
-  nlayer_patch_mixer: 4  # Number of mlp mixer layers
-  nlayer_node_mixer: 4  # Number of mlp mixer layers
+  nlayer_gnn: 2  # Number of gnn layers  FIXME: Check if receptive field is enough
+  nlayer_patch_mixer: 3  # Number of mlp mixer layers
+  nlayer_node_mixer: 3 # Number of mlp mixer layers
   pool: mean  # Pooling type for generating graph/subgraph embedding from node embeddings
   residual: true  # Use residual connection
 

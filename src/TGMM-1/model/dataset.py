@@ -67,6 +67,7 @@ def create_sliding_window_dataset(data, window, delay, horizon, stride, max_step
     return x, y
 
 def get_data_raw(cfg, root='/data'):
+    metadata = {}
     if cfg.dataset.name == 'GraphMSO':
         dataset = GraphMSO(root=os.path.join(root, 'GraphMSO'))
 
@@ -116,6 +117,8 @@ def get_data_raw(cfg, root='/data'):
         # Dynamic
         x = np.stack(loader.features)[:, :, 0, :]
         y = np.stack(loader.targets)
+        mean, std = loader.means[0], loader.stds[0]  # Values used for dataset-wide z-normalisation
+        metadata = {'norm_mean': mean, 'norm_std': std}
 
         # Static
         edge_index = loader.edges
@@ -124,7 +127,7 @@ def get_data_raw(cfg, root='/data'):
     else:
         raise ValueError(f"Dataset {cfg.dataset.name} not supported. Choose from: GraphMSO, PvUS, METRLA")
 
-    return x, y, edge_index, edge_weight, n_nodes
+    return x, y, edge_index, edge_weight, n_nodes, metadata
 
 def split_dataset(cfg: OmegaConf, dataset):
     assert cfg.dataset.train_size + cfg.dataset.val_size <= 1, "Train size and validation size must sum to no more than 1"
@@ -153,7 +156,7 @@ def print_dataloaders_overview(cfg: OmegaConf, train_loader, val_loader, test_lo
     print("-" * 58)
 
 def create_dataloaders(cfg: OmegaConf, raw_data_dir=os.path.join(os.path.dirname(__file__), '../data'), num_workers=4):
-    x, y, edge_index, edge_weight, n_nodes = get_data_raw(cfg, raw_data_dir)
+    x, y, edge_index, edge_weight, n_nodes, metadata = get_data_raw(cfg, raw_data_dir)
 
     dataset = DynamicNodeFeatureDataset(x, y)
     train_dataset, val_dataset, test_dataset = split_dataset(cfg, dataset)
@@ -180,4 +183,4 @@ def create_dataloaders(cfg: OmegaConf, raw_data_dir=os.path.join(os.path.dirname
 
     print_dataloaders_overview(cfg, train_loader, val_loader, test_loader, topo_data)
 
-    return train_loader, val_loader, test_loader, topo_data
+    return train_loader, val_loader, test_loader, topo_data, metadata

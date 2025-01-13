@@ -31,10 +31,10 @@ def train_model(cfg):
     
     # Create dataloaders
     print(f"Creating dataloaders with {num_workers} workers")
-    train_loader, val_loader, _, topo_data = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=num_workers)
+    train_loader, val_loader, _, topo_data, metadata = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=num_workers)
     
     # Create model
-    model = GMMModel(cfg, topo_data)
+    model = GMMModel(cfg, topo_data, metadata)
 
     # Set up logging
     logging_path = '/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/wandb_logs'

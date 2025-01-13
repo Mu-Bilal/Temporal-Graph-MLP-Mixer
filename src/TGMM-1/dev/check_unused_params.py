@@ -22,10 +22,10 @@ def single_forward_backward():
     cfg.dataset.val_size = 0
 
     print('Creating dataloader...')
-    train_loader, val_loader, _, topo_data = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=1)
+    train_loader, val_loader, _, topo_data, metadata = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=1)
 
     print('Initialising model...')
-    model = GMMModel(cfg, topo_data)
+    model = GMMModel(cfg, topo_data, metadata)
 
     print('Getting batch...')
     for batch in train_loader:

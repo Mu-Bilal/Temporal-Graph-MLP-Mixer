@@ -86,7 +86,7 @@ class MLPMixerTemporal(nn.Module):
         self.n_timesteps = n_timesteps
         self.with_final_norm = with_final_norm
         self.mixer_blocks = nn.ModuleList([
-            MixerBlockTemporal(n_features, n_spatial, n_timesteps, n_features*4, n_spatial*2, n_timesteps*2, dropout=dropout)  # FIXME: Check what to use for hidden dims
+            MixerBlockTemporal(n_features, n_spatial, n_timesteps, n_features*2, n_spatial*2, n_timesteps*2, dropout=dropout)  # FIXME: Check what to use for hidden dims
             for _ in range(n_layer)
         ])  
         if self.with_final_norm:

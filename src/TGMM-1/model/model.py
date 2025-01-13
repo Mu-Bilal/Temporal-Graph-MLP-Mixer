@@ -9,11 +9,11 @@ from model.elements import MLP
 from model.gnn import GNN
 from model.readouts import SingleNodeReadout
 from model.dataset import StaticGraphTopologyData
-
+from typing import Dict
 
 class GMMModel(LightningModule):
 
-    def __init__(self, cfg, topo_data):
+    def __init__(self, cfg, topo_data, metadata: Dict):
         super().__init__()
         assert cfg.metis.n_patches > 0
         self.cfg = cfg
@@ -23,6 +23,10 @@ class GMMModel(LightningModule):
         # Logging
         self.train_step_metrics_buffer = []
         self.valid_step_metrics_buffer = []
+        
+        # Dataset unnormalisation (for reporting true-scale metrics)
+        self.unnormalise = ('norm_mean' in metadata.keys() and 'norm_std' in metadata.keys())
+        self.metadata = metadata
 
         # Shortcuts 
         self.pooling = cfg.model.pool
@@ -56,12 +60,12 @@ class GMMModel(LightningModule):
             dropout=cfg.train.mlpmixer_dropout,
             with_final_norm=True
         )
-        self.readout = SingleNodeReadout(cfg.model.nfeatures_patch, cfg.model.nfeatures_node, cfg.dataset.window, cfg.dataset.horizon, self.topo_data, n_layers=1)
+        self.readout = SingleNodeReadout(cfg.model.nfeatures_patch, cfg.model.nfeatures_node, cfg.dataset.window, cfg.dataset.horizon, self.topo_data, n_layers=2)
 
         # Test run: Simple LSTM per node
         # nhid = 256
         # self.lstm = nn.LSTM(input_size=1, hidden_size=nhid, num_layers=4, batch_first=True)
-        # self.readout2 = MLP(nhid, self.horizon, nlayer=3, with_final_activation=False)
+        # self.readout2 = MLP(nhid, cfg.dataset.horizon, nlayer=3, with_final_activation=False)
 
     def setup(self, stage):
         self._move_tensors_to_device(self.topo_data)
@@ -106,7 +110,7 @@ class GMMModel(LightningModule):
 
         # Test run: Simple LSTM per node
         # batch_size = x.shape[0]
-        # x = rearrange(x, 'B n t -> (B n) t').unsqueeze(-1)[:2]
+        # x = rearrange(x, 'B n t -> (B n) t').unsqueeze(-1)
         # out, _ = self.lstm(x)  # out shape: (batch, seq_len, hidden_size)
         # out = self.readout2(out[:, -1, :])  # Transform to predict next 12 timesteps
         # out = rearrange(out, '(B n) h -> B n h', B=batch_size)
@@ -130,9 +134,13 @@ class GMMModel(LightningModule):
         metrics.update({'valid/lr': self.optimizers().param_groups[0]['lr']})
         return {'loss': loss, 'step_metrics': metrics}
     
-    def calc_metrics(self, pred, targets, key_prefix='valid'):
+    def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, key_prefix='valid'):
+        if self.unnormalise:
+            pred = pred * self.metadata['norm_std'] + self.metadata['norm_mean']
+            targets = targets * self.metadata['norm_std'] + self.metadata['norm_mean']
 
-        def calc_metrics_for_horizon(pred, targets, horizon):
+        
+        def calc_metrics_for_horizon(pred: torch.Tensor, targets: torch.Tensor, horizon: int):
             return {
                 f'{key_prefix}/mae-{horizon}': torch.mean(torch.abs(pred[..., horizon-1] - targets[..., horizon-1])),
                 f'{key_prefix}/rmse-{horizon}': torch.sqrt(torch.mean((pred[..., horizon-1] - targets[..., horizon-1])**2)),
