@@ -1,0 +1,20 @@
+
+name: la_block_t
+mode:
+  name: block_t
+  seed: 207
+  min_seq: 12
+  max_seq: 48
+
+  p_fault: 0.003
+  p_noise: 0.075
+  p_propagation: [0.33, 0.15, 0.05]
+  propagation_hops: 3
+  
+make_graph_connected: false
+connectivity:
+  method: distance
+  threshold: 0.1
+  include_self: false
+  layout: csr
+hparams: {}

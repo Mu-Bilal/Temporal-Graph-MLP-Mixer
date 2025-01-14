@@ -11,6 +11,7 @@ import wandb
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.dataset import create_dataloaders
 from model.model import GMMModel
+from train.configs.utils import load_config
 
 
 def train_model(cfg):
@@ -77,10 +78,6 @@ def train_model(cfg):
         wandb.finish()
 
 if __name__ == '__main__':
-    dataset = 'graphmso'
-    
-    cfg = OmegaConf.merge(
-        OmegaConf.load('/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/config.yaml'), 
-        OmegaConf.load(f'/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/{dataset}.yaml')
-    )
+    dataset = 'la'
+    cfg = load_config(configs_dir='/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/configs', dataset_name=dataset)
     train_model(cfg)

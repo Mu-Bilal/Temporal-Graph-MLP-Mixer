@@ -1,8 +1,22 @@
-project: GMM-MetrLA  # For WandB
+project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
+dataset_HDTTS:
+  name: la_block_t
+  mode:  # Part of missing data algo. Merged with configs/mode
+    seed: 207  # 9101112
+    min_seq: 12  # 1 hour
+    max_seq: 48  # 4 hours
+  connectivity:
+    method: distance
+    threshold: 0.1
+    include_self: False
+    layout: csr
+  make_graph_connected: False
+  hparams: {}
+
+
 dataset:
-  name: METRLA
   max_len: null
   train_size: 0.7
   val_size: 0.1
@@ -14,7 +28,7 @@ dataset:
 
 train:
   batch_size: 16  # Total graph mini-batch size
-  epochs: 15  # Maximal number of epochs
+  epochs: 100  # Maximal number of epochs
 
   lr: 1e-3  # Base learning rate
   lr_patience: 10  # number of steps before reduce learning rate
@@ -25,9 +39,9 @@ train:
   monitor: valid/loss  # Metric to monitor
 
   wd: 2e-1  # L2 regularization, weight decay
-  dropout_gnn: 0.6  # Dropout rate
-  dropout_readout: 0.6  # Dropout rate for Readout
-  dropout_patch_mixer: 0.6  # Dropout rate for patch MLPMixer
+  dropout_gnn: 0.8  # Dropout rate
+  dropout_readout: 0.7  # Dropout rate for Readout
+  dropout_patch_mixer: 0.7  # Dropout rate for patch MLPMixer
   dropout_node_mixer: 0.6  # Dropout rate for node MLPMixer
 
 model:

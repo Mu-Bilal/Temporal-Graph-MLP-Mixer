@@ -6,14 +6,12 @@ from omegaconf import OmegaConf
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.dataset import create_dataloaders
 from model.model import GMMModel
+from train.configs.utils import load_config
 
 
 def single_forward_backward():
-    batch_size = 2
-
     print('Loading config...')
-    cfg = OmegaConf.load('src/TGMM-1/train/config.yaml')
-    cfg = OmegaConf.merge(cfg, OmegaConf.load('src/TGMM-1/train/graphmso.yaml'))
+    cfg = load_config(configs_dir='src/TGMM-1/train/configs', dataset_name='la')
     
     # Override config values
     cfg.train.batch_size = 2
@@ -22,7 +20,7 @@ def single_forward_backward():
     cfg.dataset.val_size = 0
 
     print('Creating dataloader...')
-    train_loader, val_loader, _, topo_data, metadata = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=1)
+    train_loader, val_loader, test_loader, topo_data, metadata = create_dataloaders(cfg, raw_data_dir='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/data', num_workers=1)
 
     print('Initialising model...')
     model = GMMModel(cfg, topo_data, metadata)

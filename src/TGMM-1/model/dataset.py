@@ -1,15 +1,14 @@
 from torch.utils.data import Dataset, DataLoader
 from omegaconf import OmegaConf
-from torch_geometric_temporal.dataset import METRLADatasetLoader
-import ssl
 import numpy as np
 import torch
 import os
 from torch.utils.data import Subset
-from model.transform import GraphPartitionTransform, PositionalEncodingTransform
-from hdtts_dataset_creation import GraphMSO, EngRad, PvUS
+from model.transform import GraphPartitionTransform
+from hdtts_dataset_creation import EngRad, PvUS
+from hdtts_dataset_creation.dataset_util import load_dataset, load_synthetic_dataset
+from tsl.ops.connectivity import adj_to_edge_index
 from einops import rearrange
-
 
 class DynamicNodeFeatureDataset(Dataset):
     def __init__(self, x, y):
@@ -32,7 +31,6 @@ class DynamicNodeFeatureDataset(Dataset):
     def __repr__(self):
         return f"DynamicNodeDataset(x={self.x.shape}, y={self.y.shape})"
 
-
 class StaticGraphTopologyData(object):
     """
     Static graph topology data fed into METIS subgraph sampler.
@@ -41,6 +39,9 @@ class StaticGraphTopologyData(object):
         self.edge_index = torch.tensor(edge_index)
         self.edge_weight = torch.tensor(edge_weight)
         self.num_nodes = num_nodes
+
+        assert self.edge_weight.shape[0] == self.edge_index.shape[1], "Edge weight must be a 1D tensor with the same length as the number of edges"
+        assert self.edge_weight.ndim == 1, "Edge weight must be a 1D tensor"
 
     def __repr__(self):
         return f"StaticGraphTopologyData(edge_index={self.edge_index.shape}, edge_weight={self.edge_weight.shape}, num_nodes={self.num_nodes})"
@@ -66,67 +67,48 @@ def create_sliding_window_dataset(data, window, delay, horizon, stride, max_step
     x, y = rearrange(data[x_idx], 'B w n -> B n w'), rearrange(data[y_idx], 'B h n -> B n h')
     return x, y
 
-def get_data_raw(cfg, root='/data'):
-    metadata = {}
-    if cfg.dataset.name == 'GraphMSO':
-        dataset = GraphMSO(root=os.path.join(root, 'GraphMSO'))
+def get_data_raw(cfg: OmegaConf, root='/data'):
+    """
+    cfg: Top-level config. Original HDTTS config is in cfg.dataset_HDTTS.
+    """
 
-        # Dynamic; (n_timesteps, n_nodes, n_features)
-        x, y = create_sliding_window_dataset(dataset.target.squeeze(), cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
+    if cfg.dataset_HDTTS.name.startswith('mso'):
+        dataset, adj, mask = load_synthetic_dataset(cfg.dataset_HDTTS, root_dir=root)
 
-        # Static
-        adj = dataset.get_connectivity({'include_self': False, 'layout': 'edge_index'})
-        edge_index = adj[0]
-        edge_weight = adj[1]
-        n_nodes = dataset.target.shape[1]
-
-    elif cfg.dataset.name == 'PvUS':
-        dataset = PvUS(root=os.path.join(root, 'PvUS'))
-
-        # (n_timesteps, n_nodes, n_features)
-        x, y = create_sliding_window_dataset(dataset.target.to_numpy(), cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
-
-        n_nodes = dataset.n_nodes
-        adj = dataset.get_connectivity()  # No params needed
-        edge_index = adj[0]
-        edge_weight = adj[1]
-    
-    elif cfg.dataset.name == 'EngRAD':
-        dataset = EngRad(root=os.path.join(root, 'EngRAD'))
-
-        assert cfg.dataset.EngRADchannel < 5 and cfg.dataset.EngRADchannel >= 0, "Channel must be between 0 and 4"
-        channels = ['temperature_2m', 'relative_humidity_2m', 'precipitation', 'cloud_cover', 'shortwave_radiation']
-        print(f'Info: Using channel {cfg.dataset.EngRADchannel} ({channels[cfg.dataset.EngRADchannel]})')
-
-        x, y = create_sliding_window_dataset(dataset.target.to_numpy()[:, cfg.dataset.EngRADchannel::5], cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
-
-        n_nodes = dataset.n_nodes
-        adj = dataset.get_connectivity()  # No params needed
-        edge_index = adj[0]
-        edge_weight = adj[1]
-
-    elif cfg.dataset.name == 'METRLA':
-        assert cfg.dataset.delay == 0, "Delay must be 0 for METRLA"
-        assert cfg.dataset.stride == 1, "Stride must be 1 for METRLA"
-
-        ssl._create_default_https_context = ssl._create_unverified_context  # Fix for SSL verification error
-        loader = METRLADatasetLoader(raw_data_dir=os.path.join(root, 'METRLA'))
-        loader._get_edges_and_weights()
-        loader._generate_task(cfg.dataset.window, cfg.dataset.horizon)
-
-        # Dynamic
-        x = np.stack(loader.features)[:, :, 0, :]
-        y = np.stack(loader.targets)
-        mean, std = loader.means[0], loader.stds[0]  # Values used for dataset-wide z-normalisation
-        metadata = {'norm_mean': mean, 'norm_std': std}
-
-        # Static
-        edge_index = loader.edges
-        edge_weight = loader.edge_weights
-        n_nodes = x.shape[1]
+        # Get data and set missing values to nan
+        data = dataset.dataframe()
+        masked_data = data.where(mask.reshape(mask.shape[0], -1), np.nan)
+        # Fill nan with Last Observation Carried Forward
+        data = masked_data.ffill().bfill()
     else:
-        raise ValueError(f"Dataset {cfg.dataset.name} not supported. Choose from: GraphMSO, PvUS, METRLA")
+        dataset, adj, mask = load_dataset(cfg.dataset_HDTTS, root_dir=root)
 
+        # Get data and set missing values to nan
+        data = dataset.dataframe()
+        masked_data = data.where(mask.reshape(mask.shape[0], -1), np.nan)
+
+        if isinstance(dataset, PvUS):
+            # Fill nan with Last -24h Observation Carried Forward
+            data = masked_data.groupby([data.index.hour, data.index.minute]).ffill()
+            data = data.groupby([data.index.hour, data.index.minute]).bfill()
+        else:
+            # Fill nan with Last Observation Carried Forward
+            data = masked_data.ffill().bfill()
+        # Fill remaining nan with 0, if any
+        data.fillna(0, inplace=True)
+
+    if isinstance(dataset, EngRad):  # FIXME: Quickfix as model is currently univariate
+        data = data.iloc[:, cfg.dataset.EngRADchannel::5]
+
+    # (n_timesteps, n_nodes, n_features)
+    x, y = create_sliding_window_dataset(data.to_numpy(), cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
+
+    n_nodes = dataset.n_nodes
+    edge_index, edge_weight = adj_to_edge_index(adj.todense())
+    edge_weight = np.asarray(edge_weight).squeeze()
+    edge_index = np.asarray(edge_index)
+
+    metadata = {}  # TODO: Add scaler and pass information like this.
     return x, y, edge_index, edge_weight, n_nodes, metadata
 
 def split_dataset(cfg: OmegaConf, dataset):
