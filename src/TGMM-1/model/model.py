@@ -130,8 +130,8 @@ class GMMModel(LightningModule):
     def training_step(self, batch, batch_idx):
         x, y, mask_x, mask_y = batch
         y_pred = self.forward(x)  # (batch_size, n_nodes*n_timesteps)
-        loss = self.criterion(y_pred, y)
-        metrics = self.calc_metrics(y_pred, y, key_prefix='train', ignore_missing=True, missing_val=0)
+        loss = self.criterion(y_pred[~mask_y], y[~mask_y])
+        metrics = self.calc_metrics(y_pred, y, mask=mask_y, key_prefix='train', ignore_masked=True)
         metrics.update({'train/loss': loss})
         metrics.update({'train/lr': self.optimizers().param_groups[0]['lr']})
         return {'loss': loss, 'step_metrics': metrics}
@@ -139,8 +139,8 @@ class GMMModel(LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y, mask_x, mask_y = batch
         y_pred = self.forward(x)
-        loss = self.criterion(y_pred, y)
-        metrics = self.calc_metrics(y_pred, y, key_prefix='valid', ignore_missing=True, missing_val=0)
+        loss = self.criterion(y_pred[~mask_y], y[~mask_y])
+        metrics = self.calc_metrics(y_pred, y, mask=mask_y, key_prefix='valid', ignore_masked=True)
         metrics.update({'valid/loss': loss})
         metrics.update({'valid/lr': self.optimizers().param_groups[0]['lr']})
         return {'loss': loss, 'step_metrics': metrics}
@@ -148,33 +148,36 @@ class GMMModel(LightningModule):
     def test_step(self, batch, batch_idx):
         x, y, mask_x, mask_y = batch
         y_pred = self.forward(x)
-        loss = self.criterion(y_pred, y)
-        metrics = self.calc_metrics(y_pred, y, key_prefix='test', ignore_missing=True, missing_val=0)
+        loss = self.criterion(y_pred[~mask_y], y[~mask_y])
+        metrics = self.calc_metrics(y_pred, y, mask=mask_y, key_prefix='test', ignore_masked=True)
         metrics.update({'test/loss': loss})
         return {'loss': loss, 'step_metrics': metrics}
     
-    def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, key_prefix='valid', ignore_missing=False, missing_val=0):
+    def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor = None, key_prefix='valid', ignore_masked=True):
         if self.unnormalize:
             pred = pred * self.metadata['norm_std'] + self.metadata['norm_mean']
             targets = targets * self.metadata['norm_std'] + self.metadata['norm_mean']
 
-        def calc_metrics_for_horizon(pred: torch.Tensor, targets: torch.Tensor, horizon: Union[int, str]):
+        if mask is None:
+            mask = torch.ones_like(targets, dtype=bool)
+
+        def calc_metrics_for_horizon(pred: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor, horizon: Union[int, str]):
             if isinstance(horizon, int):
                 pred = pred[..., horizon-1]
                 targets = targets[..., horizon-1]
+                mask = mask[..., horizon-1]
             elif horizon == 'all':
                 pass
             else:
                 raise ValueError(f'Invalid horizon: {horizon}')
             
-            if ignore_missing:
-                missing_mask = (targets == missing_val)
-                pred = pred[~missing_mask]
-                targets = targets[~missing_mask]
+            if ignore_masked:
+                pred = pred[~mask]
+                targets = targets[~mask]
 
             mae = torch.mean(torch.abs(pred - targets))
             rmse = torch.sqrt(torch.mean((pred - targets)**2))
-            mape = 100*torch.mean(torch.abs((pred - targets) / targets))
+            mape = 100*torch.mean(torch.abs((pred - targets) / targets)) if torch.any(targets != 0) else float('nan')
             
             return {
                 f'{key_prefix}/mae-{horizon}': mae,
@@ -183,7 +186,8 @@ class GMMModel(LightningModule):
             }
         metrics = {}
         for horizon in self.log_horizons:
-            metrics.update(calc_metrics_for_horizon(pred, targets, horizon))
+            metrics.update(calc_metrics_for_horizon(pred, targets, mask, horizon))
+        metrics.update({f'{key_prefix}/missing_rate': torch.mean((~mask).float())})
         return metrics
     
     def configure_optimizers(self):

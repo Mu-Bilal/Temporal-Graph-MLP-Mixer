@@ -17,8 +17,8 @@ class DynamicNodeFeatureDataset(Dataset):
 
         self.x = torch.tensor(x)
         self.y = torch.tensor(y)
-        self.mask_x = torch.tensor(mask_x)
-        self.mask_y = torch.tensor(mask_y)
+        self.mask_x = torch.tensor(mask_x, dtype=bool)
+        self.mask_y = torch.tensor(mask_y, dtype=bool)
 
     def __len__(self):
         return len(self.x)
@@ -51,8 +51,6 @@ class StaticGraphTopologyData(object):
         return self.__repr__()
     
 def create_sliding_window_dataset(data, window, delay, horizon, stride, max_steps=None, max_allowed_mem=8):
-    assert data.ndim == 3  # (n_timesteps, n_nodes, n_features)
-
     steps = data.shape[0] - window - delay - horizon
     n_nodes = data.shape[1]
 
@@ -68,7 +66,10 @@ def create_sliding_window_dataset(data, window, delay, horizon, stride, max_step
     y_idx = np.arange(window+delay+1, window+delay+horizon+1)[np.newaxis, :] + np.arange(steps, step=stride)[:, np.newaxis]  # (batch_size, horizon, n_features)
     assert x_idx.shape[0] == y_idx.shape[0]
 
-    x, y = rearrange(data[x_idx], 'B w n f -> B n w f'), rearrange(data[y_idx], 'B h n f -> B n h f')
+    if data.ndim == 3:
+        x, y = rearrange(data[x_idx], 'B w n f -> B n w f'), rearrange(data[y_idx], 'B h n f -> B n h f')
+    else:
+        x, y = rearrange(data[x_idx], 'B w n -> B n w'), rearrange(data[y_idx], 'B h n -> B n h')
     return x, y
 
 def get_data_raw(cfg: OmegaConf, root='/data'):
@@ -78,6 +79,7 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
 
     if cfg.raw_data.name.startswith('mso'):
         dataset, adj, mask_original, mask = load_synthetic_dataset(cfg.raw_data, root_dir=root)
+        mask = mask.squeeze()
 
         # Get data and set missing values to nan
         data = dataset.dataframe()
@@ -86,7 +88,7 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
         data = masked_data.ffill().bfill()
     else:
         dataset, adj, mask_original = load_dataset(cfg.raw_data, root_dir=root)
-        mask = dataset.mask
+        mask = dataset.mask.squeeze()
 
         # Get data and set missing values to nan
         data = dataset.dataframe()
@@ -120,13 +122,10 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
         metadata = {}
 
     # FIXME: Make this dynamic for multivariate data (currently assuming data has single feature)
-    data = data[..., np.newaxis]  # (n_timesteps, n_nodes, 1)
-    data_combined = np.concatenate([data, mask], axis=-1)  # (n_timesteps, n_nodes, 2)
 
     # (n_timesteps, n_nodes, n_features)
-    x_combined, y_combined = create_sliding_window_dataset(data_combined, cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
-    x, y = x_combined[..., 0], y_combined[..., 0]
-    mask_x, mask_y = x_combined[..., 1], y_combined[..., 1]
+    x, y = create_sliding_window_dataset(data, cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
+    mask_x, mask_y = create_sliding_window_dataset(mask, cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
 
     n_nodes = dataset.n_nodes
     edge_index, edge_weight = adj_to_edge_index(adj.todense())
