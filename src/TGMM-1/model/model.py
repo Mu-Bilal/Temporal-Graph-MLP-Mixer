@@ -22,8 +22,6 @@ class GMMModel(LightningModule):
         
         # Logging
         self.train_step_metrics_buffer = []
-        self.valid_step_metrics_buffer = []
-        self.test_step_metrics_buffer = []
         self.log_horizons = cfg.logging.log_horizons
         assert all(isinstance(h, (int, str)) and (h == "all" or (isinstance(h, int) and h <= cfg.dataset.horizon)) for h in self.log_horizons), "log_horizons must be a list of integers <= horizon or 'all'"
         
@@ -128,66 +126,78 @@ class GMMModel(LightningModule):
         return out
 
     def training_step(self, batch, batch_idx):
-        x, y, mask_x, mask_y = batch
+        x, y, valid_x, valid_y = batch
         y_pred = self.forward(x)  # (batch_size, n_nodes*n_timesteps)
-        loss = self.criterion(y_pred[~mask_y], y[~mask_y])
-        metrics = self.calc_metrics(y_pred, y, mask=mask_y, key_prefix='train', ignore_masked=True)
-        metrics.update({'train/loss': loss})
-        metrics.update({'train/lr': self.optimizers().param_groups[0]['lr']})
-        return {'loss': loss, 'step_metrics': metrics}
+
+        loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
+
+        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='train', ignore_masked=self.cfg.logging.ignore_invalid)
+        metrics.update({'train/loss': loss, 'train/lr': self.optimizers().param_groups[0]['lr']})
+
+        return {'loss': loss, 'step_metrics': metrics}  # Log via external method so we can have a balance between on_step and on_epoch logging
 
     def validation_step(self, batch, batch_idx):
-        x, y, mask_x, mask_y = batch
+        x, y, valid_x, valid_y = batch
         y_pred = self.forward(x)
-        loss = self.criterion(y_pred[~mask_y], y[~mask_y])
-        metrics = self.calc_metrics(y_pred, y, mask=mask_y, key_prefix='valid', ignore_masked=True)
+
+        loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
+
+        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='valid', ignore_masked=self.cfg.logging.ignore_invalid)
         metrics.update({'valid/loss': loss})
-        metrics.update({'valid/lr': self.optimizers().param_groups[0]['lr']})
+        self.log_dict(metrics, on_step=False, on_epoch=True)
+
         return {'loss': loss, 'step_metrics': metrics}
 
     def test_step(self, batch, batch_idx):
-        x, y, mask_x, mask_y = batch
+        x, y, valid_x, valid_y = batch
         y_pred = self.forward(x)
-        loss = self.criterion(y_pred[~mask_y], y[~mask_y])
-        metrics = self.calc_metrics(y_pred, y, mask=mask_y, key_prefix='test', ignore_masked=True)
+
+        loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y) # FIXME: See below
+
+        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='test', ignore_masked=self.cfg.logging.ignore_invalid)  # FIXME: Calculate metrics differently here.
         metrics.update({'test/loss': loss})
+        self.log_dict(metrics, on_step=False, on_epoch=True)
+
         return {'loss': loss, 'step_metrics': metrics}
     
-    def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor = None, key_prefix='valid', ignore_masked=True):
+    def _calc_metrics_for_horizon(self, pred: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor, horizon: Union[int, str], ignore_masked: bool, prefix: str):
+        if isinstance(horizon, int):
+            pred_horizon = pred[..., horizon-1]
+            targets_horizon = targets[..., horizon-1]
+            valid_mask_horizon = valid_mask[..., horizon-1]
+        elif horizon == 'all':
+            pred_horizon = pred
+            targets_horizon = targets
+            valid_mask_horizon = valid_mask
+        else:
+            raise ValueError(f'Invalid horizon: {horizon}')
+        
+        if ignore_masked:
+            pred_horizon = pred_horizon[valid_mask_horizon]
+            targets_horizon = targets_horizon[valid_mask_horizon]
+
+        mae = torch.mean(torch.abs(pred_horizon - targets_horizon))
+        rmse = torch.sqrt(torch.mean((pred_horizon - targets_horizon)**2))
+        mape = 100*torch.mean(torch.abs((pred_horizon - targets_horizon) / targets_horizon)) if torch.any(targets_horizon != 0) else float('nan')
+        
+        return {
+            f'{prefix}/mae-{horizon}': mae,
+            f'{prefix}/rmse-{horizon}': rmse, 
+            f'{prefix}/mape-{horizon}': mape,
+        }
+
+    def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor = None, prefix='valid', ignore_masked=True):
         if self.unnormalize:
             pred = pred * self.metadata['norm_std'] + self.metadata['norm_mean']
             targets = targets * self.metadata['norm_std'] + self.metadata['norm_mean']
 
-        if mask is None:
-            mask = torch.ones_like(targets, dtype=bool)
+        if valid_mask is None:
+            valid_mask = torch.ones_like(targets, dtype=bool)
 
-        def calc_metrics_for_horizon(pred: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor, horizon: Union[int, str]):
-            if isinstance(horizon, int):
-                pred = pred[..., horizon-1]
-                targets = targets[..., horizon-1]
-                mask = mask[..., horizon-1]
-            elif horizon == 'all':
-                pass
-            else:
-                raise ValueError(f'Invalid horizon: {horizon}')
-            
-            if ignore_masked:
-                pred = pred[~mask]
-                targets = targets[~mask]
-
-            mae = torch.mean(torch.abs(pred - targets))
-            rmse = torch.sqrt(torch.mean((pred - targets)**2))
-            mape = 100*torch.mean(torch.abs((pred - targets) / targets)) if torch.any(targets != 0) else float('nan')
-            
-            return {
-                f'{key_prefix}/mae-{horizon}': mae,
-                f'{key_prefix}/rmse-{horizon}': rmse, 
-                f'{key_prefix}/mape-{horizon}': mape,
-            }
         metrics = {}
         for horizon in self.log_horizons:
-            metrics.update(calc_metrics_for_horizon(pred, targets, mask, horizon))
-        metrics.update({f'{key_prefix}/missing_rate': torch.mean((~mask).float())})
+            metrics.update(self._calc_metrics_for_horizon(pred, targets, valid_mask, horizon, ignore_masked, prefix))
+        metrics.update({f'{prefix}/missing_rate': torch.mean((~valid_mask).float())})
         return metrics
     
     def configure_optimizers(self):
@@ -218,36 +228,25 @@ class GMMModel(LightningModule):
         if batch_idx % self.trainer.log_every_n_steps == 0:
             self._log_from_buffer(self.train_step_metrics_buffer)
 
-    def on_validation_batch_end(self, outputs, batch, batch_idx):
-        # Store and log metrics every N steps
-        self.valid_step_metrics_buffer.append(outputs['step_metrics'])
-        
-        if batch_idx % self.trainer.log_every_n_steps == 0:
-            self._log_from_buffer(self.valid_step_metrics_buffer)
-
-    def on_test_batch_end(self, outputs, batch, batch_idx):
-        # Store and log metrics every N steps
-        self.test_step_metrics_buffer.append(outputs['step_metrics'])
-        
-        if batch_idx % self.trainer.log_every_n_steps == 0:
-            self._log_from_buffer(self.test_step_metrics_buffer)
-    
-    def on_validation_epoch_end(self):
-        self._log_from_buffer(self.valid_step_metrics_buffer)
-
-    def on_test_epoch_end(self):
-        self._log_from_buffer(self.test_step_metrics_buffer)
-
     def on_train_epoch_end(self) -> None:
         self._log_from_buffer(self.train_step_metrics_buffer)
         
     def _log_from_buffer(self, buffer: List):
+        """
+        FIXME: Call via on_train_epoch_end() may have smaller buffer size which will be ignored during logging. 
+        (I think supplying batch_size=len(buffer) doesn't help)
+        """
         if len(buffer) == 0:
             return
+        
+        if 'valid/missing_rate' in buffer[0]:
+            missing_rate = [step_metric['valid/missing_rate'] for step_metric in buffer]
+            print(f'missing_rate: {missing_rate}')
+            print(f'missing_rate mean: {sum(missing_rate) / len(missing_rate)}')
 
         # Average the metrics over the last N steps
         avg_metrics = {k: sum(step_dict[k] for step_dict in buffer) / len(buffer) for k in buffer[0]}
 
         # Log the averaged metrics and clear the buffer
-        self.log_dict(avg_metrics, sync_dist=True)
+        self.log_dict(avg_metrics, batch_size=len(buffer), sync_dist=True)
         buffer.clear()

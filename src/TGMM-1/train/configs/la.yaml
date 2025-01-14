@@ -1,7 +1,7 @@
 project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
-raw_data:
+raw_data:  # HDTTS data pipeline settings
   name: la_normal  # dataset_failureMode
   mode:  # Part of missing data algo. Merged with configs/mode
     seed: 207  # 9101112
@@ -24,17 +24,20 @@ dataset:
   stride: 1
   delay: 0
   EngRADchannel: 0
-  normalize: true
+  normalize: True
 
 train:
   batch_size: 16  # Total graph mini-batch size
-  epochs: 1  # Maximal number of epochs
+  epochs: 5  # Maximal number of epochs
+
+  mask_loss: False  # If this is True, imputed values are ignored when computing prediction loss (independent of metrics, see `logging` below)
 
   lr: 1e-3  # Base learning rate
   lr_patience: 10  # number of steps before reduce learning rate
   lr_decay: 0.5  # learning rate decay factor
-  early_stop_patience: 15
   min_lr: 1.0e-5  # A lower bound on the learning rate.
+
+  early_stop_patience: 8
 
   monitor: valid/loss  # Metric to monitor
 
@@ -58,7 +61,7 @@ model:
   nlayer_readout: 1  # Number of mlp layers for readout
 
   pool: mean  # Pooling type for generating graph/subgraph embedding from node embeddings
-  residual: true  # Use residual connection
+  residual: True  # Use residual connection
 
 # Positional encoding options (currently not used directly, but needed for GraphPartitionTransform - TODO: Check and rm)
 pos_enc:
@@ -69,10 +72,11 @@ pos_enc:
 
 # Metis patch extraction options
 metis:
-  enable: true  # Enable Metis partition (otherwise use random partition)
-  online: false  # Enable data augmentation
+  enable: True  # Enable Metis partition (otherwise use random partition)
+  online: False  # Enable data augmentation
   n_patches: 80  # The number of partitions
   num_hops: 1  # expanding patches with k hop neighbourhood
 
 logging:
   log_horizons: [3, 6, 12, "all"]
+  ignore_invalid: False

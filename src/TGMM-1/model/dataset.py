@@ -12,6 +12,11 @@ from einops import rearrange
 
 class DynamicNodeFeatureDataset(Dataset):
     def __init__(self, x, y, mask_x, mask_y):
+        """
+        mask (pandas.Dataframe or numpy.ndarray, optional): Boolean mask
+        denoting if values in data are valid (:obj:`True`) or not
+        (:obj:`False`).
+        """
         assert len(x) == len(y) == len(mask_x) == len(mask_y), "x, y, mask_x, and mask_y must have the same length"
         assert len(x) > 0, "x, y, mask_x, and mask_y must have at least one sample"
 
