@@ -18,7 +18,7 @@ raw_data:
 dataset:
   max_len: null
   train_size: 0.7
-  val_size: 0.1
+  val_size: 0.3
   horizon: 12
   window: 12
   stride: 1
@@ -73,3 +73,6 @@ metis:
   online: false  # Enable data augmentation
   n_patches: 80  # The number of partitions
   num_hops: 1  # expanding patches with k hop neighbourhood
+
+logging:
+  log_horizons: [3, 6, 12, "all"]

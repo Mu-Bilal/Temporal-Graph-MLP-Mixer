@@ -24,9 +24,11 @@ class GMMModel(LightningModule):
         self.train_step_metrics_buffer = []
         self.valid_step_metrics_buffer = []
         self.test_step_metrics_buffer = []
+        self.log_horizons = cfg.logging.log_horizons
+        assert all(isinstance(h, (int, str)) and (h == "all" or (isinstance(h, int) and h <= cfg.dataset.horizon)) for h in self.log_horizons), "log_horizons must be a list of integers <= horizon or 'all'"
         
         # Dataset unnormalisation (for reporting true-scale metrics)
-        self.unnormalise = ('norm_mean' in metadata.keys() and 'norm_std' in metadata.keys())
+        self.unnormalize = ('norm_mean' in metadata.keys() and 'norm_std' in metadata.keys())
         self.metadata = metadata
 
         # Shortcuts 
@@ -126,7 +128,7 @@ class GMMModel(LightningModule):
         return out
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
+        x, y, mask_x, mask_y = batch
         y_pred = self.forward(x)  # (batch_size, n_nodes*n_timesteps)
         loss = self.criterion(y_pred, y)
         metrics = self.calc_metrics(y_pred, y, key_prefix='train', ignore_missing=True, missing_val=0)
@@ -135,7 +137,7 @@ class GMMModel(LightningModule):
         return {'loss': loss, 'step_metrics': metrics}
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
+        x, y, mask_x, mask_y = batch
         y_pred = self.forward(x)
         loss = self.criterion(y_pred, y)
         metrics = self.calc_metrics(y_pred, y, key_prefix='valid', ignore_missing=True, missing_val=0)
@@ -144,7 +146,7 @@ class GMMModel(LightningModule):
         return {'loss': loss, 'step_metrics': metrics}
 
     def test_step(self, batch, batch_idx):
-        x, y = batch
+        x, y, mask_x, mask_y = batch
         y_pred = self.forward(x)
         loss = self.criterion(y_pred, y)
         metrics = self.calc_metrics(y_pred, y, key_prefix='test', ignore_missing=True, missing_val=0)
@@ -152,7 +154,7 @@ class GMMModel(LightningModule):
         return {'loss': loss, 'step_metrics': metrics}
     
     def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, key_prefix='valid', ignore_missing=False, missing_val=0):
-        if self.unnormalise:
+        if self.unnormalize:
             pred = pred * self.metadata['norm_std'] + self.metadata['norm_mean']
             targets = targets * self.metadata['norm_std'] + self.metadata['norm_mean']
 
@@ -180,7 +182,7 @@ class GMMModel(LightningModule):
                 f'{key_prefix}/mape-{horizon}': mape,
             }
         metrics = {}
-        for horizon in [3, 6, 12, 'all']:
+        for horizon in self.log_horizons:
             metrics.update(calc_metrics_for_horizon(pred, targets, horizon))
         return metrics
     

@@ -27,7 +27,7 @@ def single_forward_backward():
 
     print('Getting batch...')
     for batch in train_loader:
-        x, y = batch
+        x, y, mask_x, mask_y = batch
         print(f'{x.shape = }')
         break
 

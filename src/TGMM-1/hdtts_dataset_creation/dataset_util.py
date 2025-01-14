@@ -45,7 +45,7 @@ def load_synthetic_dataset(dataset_cfg: OmegaConf, root_dir: str):
     else:
         raise ValueError(f"Dataset {dataset_cfg.name} not available.")
 
-    original_mask = dataset.get_mask(dtype=bool, as_dataframe=False)  # FIXME: Not needed for now. Maybe want to do unmasked testing later?
+    mask_original = dataset.get_mask(dtype=bool, as_dataframe=False)
 
     # Override mask with injected missing values
     dataset.set_mask(dataset.training_mask)
@@ -54,7 +54,7 @@ def load_synthetic_dataset(dataset_cfg: OmegaConf, root_dir: str):
     # Get connectivity
     adj = dataset.get_connectivity(**dataset_cfg.connectivity)
 
-    return dataset, adj, mask
+    return dataset, adj, mask_original, mask
 
 def load_dataset(dataset_cfg: OmegaConf, root_dir: str):
     # Get the dataset

@@ -11,25 +11,26 @@ from tsl.ops.connectivity import adj_to_edge_index
 from einops import rearrange
 
 class DynamicNodeFeatureDataset(Dataset):
-    def __init__(self, x, y):
-        assert len(x) == len(y), "x and y must have the same length"
-        assert len(x) > 0, "x and y must have at least one sample"
+    def __init__(self, x, y, mask_x, mask_y):
+        assert len(x) == len(y) == len(mask_x) == len(mask_y), "x, y, mask_x, and mask_y must have the same length"
+        assert len(x) > 0, "x, y, mask_x, and mask_y must have at least one sample"
 
-        # Shape should be ()
         self.x = torch.tensor(x)
         self.y = torch.tensor(y)
+        self.mask_x = torch.tensor(mask_x)
+        self.mask_y = torch.tensor(mask_y)
 
     def __len__(self):
         return len(self.x)
     
     def __getitem__(self, idx):
-        return self.x[idx], self.y[idx]
+        return self.x[idx], self.y[idx], self.mask_x[idx], self.mask_y[idx]
     
     def __str__(self):
         return self.__repr__()
     
     def __repr__(self):
-        return f"DynamicNodeDataset(x={self.x.shape}, y={self.y.shape})"
+        return f"DynamicNodeDataset(x={self.x.shape}, y={self.y.shape}, mask_x={self.mask_x.shape}, mask_y={self.mask_y.shape})"
 
 class StaticGraphTopologyData(object):
     """
@@ -50,21 +51,24 @@ class StaticGraphTopologyData(object):
         return self.__repr__()
     
 def create_sliding_window_dataset(data, window, delay, horizon, stride, max_steps=None, max_allowed_mem=8):
-    assert data.ndim == 2  # (n_timesteps, n_nodes)
+    assert data.ndim == 3  # (n_timesteps, n_nodes, n_features)
+
     steps = data.shape[0] - window - delay - horizon
     n_nodes = data.shape[1]
+
     if max_steps is not None:
         steps = min(steps, max_steps)
+
     # Calc memory needed
     memory_needed = (window + horizon) * steps * n_nodes * 8 * 1e-9  # GB
     print(f"Predicted raw dataset size: {memory_needed:.2f} GB")
     assert memory_needed <= max_allowed_mem, f"Memory needed ({memory_needed:.2f} GB) exceeds max allowed memory ({max_allowed_mem} GB)"
 
-    x_idx = np.arange(window)[np.newaxis, :] + np.arange(steps, step=stride)[:, np.newaxis]  # (batch_size, window)
-    y_idx = np.arange(window+delay+1, window+delay+horizon+1)[np.newaxis, :] + np.arange(steps, step=stride)[:, np.newaxis]  # (batch_size, horizon)
+    x_idx = np.arange(window)[np.newaxis, :] + np.arange(steps, step=stride)[:, np.newaxis]  # (batch_size, window, n_features)
+    y_idx = np.arange(window+delay+1, window+delay+horizon+1)[np.newaxis, :] + np.arange(steps, step=stride)[:, np.newaxis]  # (batch_size, horizon, n_features)
     assert x_idx.shape[0] == y_idx.shape[0]
 
-    x, y = rearrange(data[x_idx], 'B w n -> B n w'), rearrange(data[y_idx], 'B h n -> B n h')
+    x, y = rearrange(data[x_idx], 'B w n f -> B n w f'), rearrange(data[y_idx], 'B h n f -> B n h f')
     return x, y
 
 def get_data_raw(cfg: OmegaConf, root='/data'):
@@ -73,19 +77,20 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
     """
 
     if cfg.raw_data.name.startswith('mso'):
-        dataset, adj, mask = load_synthetic_dataset(cfg.raw_data, root_dir=root)
+        dataset, adj, mask_original, mask = load_synthetic_dataset(cfg.raw_data, root_dir=root)
 
         # Get data and set missing values to nan
         data = dataset.dataframe()
-        masked_data = data.where(mask.reshape(mask.shape[0], -1), np.nan)
+        masked_data = data.where(mask_original.reshape(mask_original.shape[0], -1), np.nan)
         # Fill nan with Last Observation Carried Forward
         data = masked_data.ffill().bfill()
     else:
-        dataset, adj, mask = load_dataset(cfg.raw_data, root_dir=root)
+        dataset, adj, mask_original = load_dataset(cfg.raw_data, root_dir=root)
+        mask = dataset.mask
 
         # Get data and set missing values to nan
         data = dataset.dataframe()
-        masked_data = data.where(mask.reshape(mask.shape[0], -1), np.nan)
+        masked_data = data.where(mask_original.reshape(mask_original.shape[0], -1), np.nan)
 
         if isinstance(dataset, PvUS):
             # Fill nan with Last -24h Observation Carried Forward
@@ -96,6 +101,7 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
             data = masked_data.ffill().bfill()
         # Fill remaining nan with 0, if any
         data.fillna(0, inplace=True)
+
 
     if isinstance(dataset, EngRad):  # FIXME: Quickfix as model is currently univariate
         data = data.iloc[:, cfg.dataset.EngRADchannel::5]
@@ -113,16 +119,21 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
     else:
         metadata = {}
 
+    # FIXME: Make this dynamic for multivariate data (currently assuming data has single feature)
+    data = data[..., np.newaxis]  # (n_timesteps, n_nodes, 1)
+    data_combined = np.concatenate([data, mask], axis=-1)  # (n_timesteps, n_nodes, 2)
+
     # (n_timesteps, n_nodes, n_features)
-    x, y = create_sliding_window_dataset(data, cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
+    x_combined, y_combined = create_sliding_window_dataset(data_combined, cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
+    x, y = x_combined[..., 0], y_combined[..., 0]
+    mask_x, mask_y = x_combined[..., 1], y_combined[..., 1]
 
     n_nodes = dataset.n_nodes
     edge_index, edge_weight = adj_to_edge_index(adj.todense())
     edge_weight = np.asarray(edge_weight).squeeze()
     edge_index = np.asarray(edge_index)
 
-    metadata = {}  # TODO: Add scaler and pass information like this.
-    return x, y, edge_index, edge_weight, n_nodes, metadata
+    return x, y, mask_x, mask_y, edge_index, edge_weight, n_nodes, metadata
 
 def split_dataset(cfg: OmegaConf, dataset):
     """
@@ -159,9 +170,9 @@ def print_dataloaders_overview(cfg: OmegaConf, train_loader, val_loader, test_lo
     print("-" * 58)
 
 def create_dataloaders(cfg: OmegaConf, raw_data_dir=os.path.join(os.path.dirname(__file__), '../data'), num_workers=4):
-    x, y, edge_index, edge_weight, n_nodes, metadata = get_data_raw(cfg, raw_data_dir)
+    x, y, mask_x, mask_y, edge_index, edge_weight, n_nodes, metadata = get_data_raw(cfg, raw_data_dir)
 
-    dataset = DynamicNodeFeatureDataset(x, y)
+    dataset = DynamicNodeFeatureDataset(x, y, mask_x, mask_y)
     train_dataset, val_dataset, test_dataset = split_dataset(cfg, dataset)
 
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=num_workers, drop_last=True, pin_memory=True, persistent_workers=True)
