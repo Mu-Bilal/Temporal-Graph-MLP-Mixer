@@ -9,9 +9,9 @@ def load_config(configs_dir: str, dataset_name: str):
         OmegaConf.load(os.path.join(configs_dir, f'{dataset_name}.yaml'))
     )
 
-    failure_mode = '_'.join(cfg.dataset_HDTTS.name.split('_')[1:])
+    failure_mode = '_'.join(cfg.raw_data.name.split('_')[1:])
 
     failure_cfg = OmegaConf.load(os.path.join(failure_mode_path, failure_mode + '.yaml'))
-    cfg.dataset_HDTTS.mode = OmegaConf.merge(cfg.dataset_HDTTS.mode, failure_cfg)
+    cfg.raw_data.mode = OmegaConf.merge(cfg.raw_data.mode, failure_cfg)
 
     return cfg

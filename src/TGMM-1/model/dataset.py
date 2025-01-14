@@ -69,11 +69,11 @@ def create_sliding_window_dataset(data, window, delay, horizon, stride, max_step
 
 def get_data_raw(cfg: OmegaConf, root='/data'):
     """
-    cfg: Top-level config. Original HDTTS config is in cfg.dataset_HDTTS.
+    cfg: Top-level config. Original HDTTS config is in cfg.raw_data.
     """
 
-    if cfg.dataset_HDTTS.name.startswith('mso'):
-        dataset, adj, mask = load_synthetic_dataset(cfg.dataset_HDTTS, root_dir=root)
+    if cfg.raw_data.name.startswith('mso'):
+        dataset, adj, mask = load_synthetic_dataset(cfg.raw_data, root_dir=root)
 
         # Get data and set missing values to nan
         data = dataset.dataframe()
@@ -81,7 +81,7 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
         # Fill nan with Last Observation Carried Forward
         data = masked_data.ffill().bfill()
     else:
-        dataset, adj, mask = load_dataset(cfg.dataset_HDTTS, root_dir=root)
+        dataset, adj, mask = load_dataset(cfg.raw_data, root_dir=root)
 
         # Get data and set missing values to nan
         data = dataset.dataframe()
@@ -100,8 +100,21 @@ def get_data_raw(cfg: OmegaConf, root='/data'):
     if isinstance(dataset, EngRad):  # FIXME: Quickfix as model is currently univariate
         data = data.iloc[:, cfg.dataset.EngRADchannel::5]
 
+    data = data.to_numpy()
+
+    if cfg.dataset.normalize:
+        # Calculate statistics on the entire dataset
+        norm_mean, norm_std = data.mean(), data.std()
+        data = (data - norm_mean) / norm_std
+        metadata = {
+            'norm_mean': norm_mean,
+            'norm_std': norm_std
+        }
+    else:
+        metadata = {}
+
     # (n_timesteps, n_nodes, n_features)
-    x, y = create_sliding_window_dataset(data.to_numpy(), cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
+    x, y = create_sliding_window_dataset(data, cfg.dataset.window, cfg.dataset.delay, cfg.dataset.horizon, cfg.dataset.stride, max_steps=cfg.dataset.max_len)
 
     n_nodes = dataset.n_nodes
     edge_index, edge_weight = adj_to_edge_index(adj.todense())

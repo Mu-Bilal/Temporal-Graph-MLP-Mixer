@@ -1,8 +1,8 @@
 project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
-dataset_HDTTS:
-  name: la_block_t
+raw_data:
+  name: la_normal  # dataset_failureMode
   mode:  # Part of missing data algo. Merged with configs/mode
     seed: 207  # 9101112
     min_seq: 12  # 1 hour
@@ -15,7 +15,6 @@ dataset_HDTTS:
   make_graph_connected: False
   hparams: {}
 
-
 dataset:
   max_len: null
   train_size: 0.7
@@ -25,6 +24,7 @@ dataset:
   stride: 1
   delay: 0
   EngRADchannel: 0
+  normalize: true
 
 train:
   batch_size: 16  # Total graph mini-batch size

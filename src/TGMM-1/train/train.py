@@ -11,7 +11,7 @@ import wandb
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.dataset import create_dataloaders
 from model.model import GMMModel
-from train.configs.utils import load_config
+from configs.utils import load_config
 
 
 def train_model(cfg):
