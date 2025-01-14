@@ -18,7 +18,7 @@ raw_data:
 dataset:
   max_len: null
   train_size: 0.7
-  val_size: 0.3
+  val_size: 0.1
   horizon: 12
   window: 12
   stride: 1
@@ -28,7 +28,7 @@ dataset:
 
 train:
   batch_size: 16  # Total graph mini-batch size
-  epochs: 100  # Maximal number of epochs
+  epochs: 1  # Maximal number of epochs
 
   lr: 1e-3  # Base learning rate
   lr_patience: 10  # number of steps before reduce learning rate

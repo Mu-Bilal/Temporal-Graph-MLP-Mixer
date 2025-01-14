@@ -3,7 +3,7 @@ import os
 import torch
 from lightning import Trainer
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, Callback
 from lightning.pytorch.strategies import DDPStrategy
 from omegaconf import OmegaConf
 import wandb
@@ -12,6 +12,32 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.dataset import create_dataloaders
 from model.model import GMMModel
 from configs.utils import load_config
+
+class MiscCallback(Callback):
+    """
+    Custom callback to access the WandB run data. This cannot be accessed during setup as Logger is initialised only when trainer.fit() is called.
+
+    From Docs:
+    trainer.logger.experiment: Actual wandb object. To use wandb features in your :class:`~lightning.pytorch.core.LightningModule` do the
+    following. self.logger.experiment.some_wandb_function()
+
+    # Only available in rank0 process, others have _DummyExperiment
+    """
+    def on_train_start(self, trainer, pl_module):
+        if isinstance(trainer.logger, WandbLogger) and trainer.is_global_zero:
+            # Dynamically set the checkpoint directory in ModelCheckpoint
+            print(f"Checkpoints will be saved in: {trainer.logger.experiment.dir}")
+            trainer.checkpoint_callback.dirpath = trainer.logger.experiment.dir
+
+        print(f'Node rank: {trainer.node_rank}, Global rank: {trainer.global_rank}, Local rank: {trainer.local_rank}')
+        print(f'Trainer strategy: {trainer.strategy}')
+
+    def on_train_end(self, trainer, pl_module):
+        if isinstance(trainer.logger, WandbLogger) and trainer.is_global_zero:
+            # print(f'Files in wandb dir: {os.listdir(trainer.logger.experiment.dir)}')
+            # FIXME: Quickfix to make sure last checkpoint is saved.
+            trainer.logger.experiment.save(os.path.join(trainer.logger.experiment.dir, 'last.ckpt'),
+                                           base_path=trainer.logger.experiment.dir)
 
 
 def train_model(cfg):
@@ -44,7 +70,7 @@ def train_model(cfg):
     logger.log_hyperparams(OmegaConf.to_container(cfg))
 
     checkpoint_callback = ModelCheckpoint(
-        dirpath='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/checkpoints',
+        #  dirpath='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/checkpoints', Supplied later
         filename='{epoch}',
         save_top_k=0,
         monitor=cfg.train.monitor,
@@ -67,7 +93,7 @@ def train_model(cfg):
         deterministic=True if cfg.seed else False,
         log_every_n_steps=min(50, len(train_loader)),
         gradient_clip_val=5.0,
-        callbacks=[checkpoint_callback, early_stop_callback],
+        callbacks=[checkpoint_callback, early_stop_callback, MiscCallback()],
         strategy=strategy,
         devices=devices
     )
