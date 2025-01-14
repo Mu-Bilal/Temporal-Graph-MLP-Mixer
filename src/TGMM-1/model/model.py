@@ -140,6 +140,9 @@ class GMMModel(LightningModule):
         x, y, valid_x, valid_y = batch
         y_pred = self.forward(x)
 
+        if self.cfg.train.mask_loss and not torch.any(valid_y):
+            return None
+
         loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
 
         metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='valid', ignore_masked=self.cfg.logging.ignore_invalid)
@@ -151,6 +154,9 @@ class GMMModel(LightningModule):
     def test_step(self, batch, batch_idx):
         x, y, valid_x, valid_y = batch
         y_pred = self.forward(x)
+
+        if self.cfg.train.mask_loss and not torch.any(valid_y):
+            return None
 
         loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y) # FIXME: See below
 
@@ -175,6 +181,9 @@ class GMMModel(LightningModule):
         if ignore_masked:
             pred_horizon = pred_horizon[valid_mask_horizon]
             targets_horizon = targets_horizon[valid_mask_horizon]
+
+        if not torch.any(valid_mask_horizon):
+            return {}
 
         mae = torch.mean(torch.abs(pred_horizon - targets_horizon))
         rmse = torch.sqrt(torch.mean((pred_horizon - targets_horizon)**2))

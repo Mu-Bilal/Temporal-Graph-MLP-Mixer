@@ -28,9 +28,9 @@ dataset:
 
 train:
   batch_size: 16  # Total graph mini-batch size
-  epochs: 5  # Maximal number of epochs
+  epochs: 10  # Maximal number of epochs
 
-  mask_loss: False  # If this is True, imputed values are ignored when computing prediction loss (independent of metrics, see `logging` below)
+  mask_loss: True  # If this is True, imputed values are ignored when computing prediction loss (independent of metrics, see `logging` below)
 
   lr: 1e-3  # Base learning rate
   lr_patience: 10  # number of steps before reduce learning rate
@@ -79,4 +79,4 @@ metis:
 
 logging:
   log_horizons: [3, 6, 12, "all"]
-  ignore_invalid: False
+  ignore_invalid: True
