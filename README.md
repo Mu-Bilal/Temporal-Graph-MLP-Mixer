@@ -2,6 +2,8 @@
 
 This repository contains the implementation of the Temporal Graph MLP-Mixer, an extension of the original Graph MLP-Mixer model designed to handle graph-structured data with temporal dynamics. This model aims to effectively capture both spatial and temporal dependencies within data that evolves over time, such as dynamic social networks, traffic networks, or financial transaction graphs.
 
+Note: To view the comparative study code checkout the Comparative-study branch.
+
 ## Overview
 
 The Temporal Graph MLP-Mixer extends the Graph ViT/MLP-Mixer architecture by incorporating time-evolving features into the graph neural network framework. This allows the model to not only consider the structural and feature changes within the graph but also to model the evolution of these changes over time.
