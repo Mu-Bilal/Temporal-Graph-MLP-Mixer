@@ -52,17 +52,17 @@ class MixerBlockTemporal(nn.Module):
         applying the transformation to all leading dimensions. So need to rearrange the input tensor to 
         apply the transformation to the last dimension.
         """
-        self.token_mix = nn.Sequential(
+        self.token_mix = nn.Sequential(  # Spatial mixing
             nn.LayerNorm(n_features),
             Rearrange('B t s f -> B t f s'),  # (batch, time, space, features)
             FeedForward(n_spatial, spatial_hiddim, dropout),
             Rearrange('B t f s -> B t s f'),
         )
-        self.channel_mix = nn.Sequential(
+        self.channel_mix = nn.Sequential(  # Feature mixing
             nn.LayerNorm(n_features),
             FeedForward(n_features, features_hiddim, dropout),
         )
-        self.temporal_mix = nn.Sequential(
+        self.temporal_mix = nn.Sequential(  # Temporal mixing
             nn.LayerNorm(n_features),
             Rearrange('B t s f -> B s f t'),
             FeedForward(n_timesteps, temporal_hiddim, dropout),

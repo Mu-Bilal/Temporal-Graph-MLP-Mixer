@@ -7,6 +7,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, Callback
 from lightning.pytorch.strategies import DDPStrategy
 from omegaconf import OmegaConf
 import wandb
+import argparse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.dataset import create_dataloaders
@@ -70,9 +71,8 @@ def train_model(cfg):
     logger.log_hyperparams(OmegaConf.to_container(cfg))
 
     checkpoint_callback = ModelCheckpoint(
-        #  dirpath='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/checkpoints', Supplied later
         filename='{epoch}',
-        save_top_k=1,
+        save_top_k=2,
         monitor=cfg.train.monitor,
         mode='min',
         save_last=True,
@@ -83,7 +83,8 @@ def train_model(cfg):
         monitor=cfg.train.monitor,
         mode='min',
         patience=cfg.train.early_stop_patience,
-        verbose=True
+        verbose=True,
+        min_delta=0.001
     )
     
     torch.set_float32_matmul_precision('medium')
@@ -105,6 +106,10 @@ def train_model(cfg):
         wandb.finish()
 
 if __name__ == '__main__':
-    dataset = 'air'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dataset', type=str, help='Name of dataset to train on')
+    args = parser.parse_args()
+    dataset = args.dataset
+
     cfg = load_config(configs_dir='/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/configs', dataset_name=dataset)
     train_model(cfg)

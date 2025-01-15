@@ -2,7 +2,7 @@ project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
 raw_data:  # HDTTS data pipeline settings
-  name: mso_point  # dataset_failureMode
+  name: mso_block_t  # dataset_failureMode
   connectivity:
     include_self: False
     layout: csr
@@ -34,7 +34,7 @@ dataset:
 train:
   batch_size: 16  # Total graph mini-batch size
   accumulate_grad_batches: 1
-  epochs: 10  # Maximal number of epochs
+  epochs: 60  # Maximal number of epochs
 
   # If this is True, missing (imputed) values are ignored when computing prediction loss (independent of metrics, see `logging` below)
   mask_loss: True  
@@ -44,13 +44,13 @@ train:
   lr_decay: 0.5  # learning rate decay factor
   min_lr: 1.0e-5  # A lower bound on the learning rate.
   early_stop_patience: 5
-  monitor: valid/loss  # Metric to monitor
+  monitor: train/loss  # Metric to monitor
 
-  wd: 2e-1  # L2 regularization, weight decay
-  dropout_gnn: 0.8  # Dropout rate
-  dropout_readout: 0.7  # Dropout rate for Readout
-  dropout_patch_mixer: 0.7  # Dropout rate for patch MLPMixer
-  dropout_node_mixer: 0.6  # Dropout rate for node MLPMixer
+  wd: 1e-2  # L2 regularization, weight decay
+  dropout_gnn: 0.5  # Dropout rate
+  dropout_readout: 0.4  # Dropout rate for Readout
+  dropout_patch_mixer: 0.4  # Dropout rate for patch MLPMixer
+  dropout_node_mixer: 0.3  # Dropout rate for node MLPMixer
 
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options
@@ -58,12 +58,12 @@ model:
 
   add_valid_mask: True  # Adds mask specifying if observation is valid (or invalid and hence imputed) to model input
   
-  nfeatures_patch: 128  # Number of features for patch mixer
-  nfeatures_node: 64  # Number of features for node mixer
+  nfeatures_patch: 192  # Number of features for patch mixer
+  nfeatures_node: 128  # Number of features for node mixer
 
   nlayer_gnn: 2  # Number of gnn layers  FIXME: Check if receptive field is enough
-  nlayer_patch_mixer: 2  # Number of mlp mixer layers
-  nlayer_node_mixer: 3 # Number of mlp mixer layers
+  nlayer_patch_mixer: 3  # Number of mlp mixer layers
+  nlayer_node_mixer: 4 # Number of mlp mixer layers
 
   nlayer_readout: 1  # Number of mlp layers for readout
 
@@ -81,7 +81,7 @@ pos_enc:
 metis:
   enable: True  # Enable Metis partition (otherwise use random partition)
   online: False  # Enable data augmentation
-  n_patches: 80  # The number of partitions
+  n_patches: 50  # The number of partitions
   num_hops: 1  # expanding patches with k hop neighbourhood
 
 logging:

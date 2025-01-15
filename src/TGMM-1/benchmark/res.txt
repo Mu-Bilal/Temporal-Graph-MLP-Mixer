@@ -57,3 +57,33 @@ test/synthRm-missing_rate   0.4705088436603546
    test/synthRm-rmse-3       6.79472541809082
    test/synthRm-rmse-6       7.387988567352295
   test/synthRm-rmse-all      7.539520740509033
+
+
+784solz9, mso, point (no wd, no dropout)
+       test/all-mae-12        0.07682932913303375
+     test/all-mae-24        0.0765879675745964
+     test/all-mae-36        0.08732116222381592
+    test/all-mae-all        0.0781017541885376
+    test/all-mape-12         47.29136276245117
+    test/all-mape-24         42.0826530456543
+    test/all-mape-36         55.4708366394043
+    test/all-mape-all       45.831748962402344
+  test/all-missing_rate             0.0
+    test/all-rmse-12        0.09743387252092361
+    test/all-rmse-24        0.09707749634981155
+    test/all-rmse-36        0.11063479632139206
+    test/all-rmse-all       0.09918534010648727
+        test/loss           0.0450822152197361
+   test/synthRm-mae-12      0.07683562487363815
+   test/synthRm-mae-24      0.07659480720758438
+   test/synthRm-mae-36      0.0873282179236412
+  test/synthRm-mae-all      0.0780952051281929
+  test/synthRm-mape-12      47.997867584228516
+  test/synthRm-mape-24       42.02872848510742
+  test/synthRm-mape-36      56.328041076660156
+  test/synthRm-mape-all      46.12567901611328
+test/synthRm-missing_rate   0.0498587042093277
+  test/synthRm-rmse-12      0.09743963927030563
+  test/synthRm-rmse-24      0.09708276391029358
+  test/synthRm-rmse-36      0.11064068973064423
+  test/synthRm-rmse-all     0.09917479008436203

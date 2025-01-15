@@ -23,7 +23,7 @@ cd $workdir
 echo "Running in directory: `pwd`"
 
 # Run the Python script using the options
-CMD="srun python src/TGMM-1/train/train.py"
+CMD="srun python src/TGMM-1/train/train.py $1"
 
 echo "Executing command: $CMD"
 eval $CMD
