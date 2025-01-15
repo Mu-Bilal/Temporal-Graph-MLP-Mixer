@@ -148,3 +148,61 @@ test/synthRm-missing_rate   0.6651365756988525
   test/synthRm-rmse-all      1.491316318511963
 
 ---------------------------------------------------------------------
+
+2bzar9ik, air, normal
+     test/all-mae-2          18.72188949584961
+     test/all-mae-4          22.33045768737793
+     test/all-mae-6         25.028709411621094
+    test/all-mae-all        21.130170822143555
+     test/all-mape-2        46.858131408691406
+     test/all-mape-4         58.45718765258789
+     test/all-mape-6         66.94990539550781
+    test/all-mape-all        54.74579620361328
+  test/all-missing_rate     0.12114646285772324
+     test/all-rmse-2         28.40094566345215
+     test/all-rmse-4         32.78085708618164
+     test/all-rmse-6         36.2135009765625
+    test/all-rmse-all       31.700136184692383
+        test/loss           0.31124311685562134
+   test/synthRm-mae-2        18.72188949584961
+   test/synthRm-mae-4        22.33045768737793
+   test/synthRm-mae-6       25.028709411621094
+  test/synthRm-mae-all      21.130170822143555
+   test/synthRm-mape-2      46.858131408691406
+   test/synthRm-mape-4       58.45718765258789
+   test/synthRm-mape-6       66.94990539550781
+  test/synthRm-mape-all      54.74579620361328
+test/synthRm-missing_rate   0.12114646285772324
+   test/synthRm-rmse-2       28.40094566345215
+   test/synthRm-rmse-4       32.78085708618164
+   test/synthRm-rmse-6       36.2135009765625
+  test/synthRm-rmse-all     31.700136184692383
+
+n7vcocod, air, point
+     test/all-mae-2          19.80620574951172
+     test/all-mae-4         22.884592056274414
+     test/all-mae-6         25.942747116088867
+    test/all-mae-all        22.066444396972656
+     test/all-mape-2        52.961570739746094
+     test/all-mape-4         58.9210090637207
+     test/all-mape-6         68.81634521484375
+    test/all-mape-all        58.20038604736328
+  test/all-missing_rate     0.12114646285772324
+     test/all-rmse-2         29.59722900390625
+     test/all-rmse-4        33.648860931396484
+     test/all-rmse-6        37.515438079833984
+    test/all-rmse-all       32.869049072265625
+        test/loss           0.32603469491004944
+   test/synthRm-mae-2       19.835634231567383
+   test/synthRm-mae-4       22.920955657958984
+   test/synthRm-mae-6       25.964231491088867
+  test/synthRm-mae-all      22.096691131591797
+   test/synthRm-mape-2      53.203033447265625
+   test/synthRm-mape-4       59.14842987060547
+   test/synthRm-mape-6       69.01038360595703
+  test/synthRm-mape-all     58.458770751953125
+test/synthRm-missing_rate   0.34075769782066345
+   test/synthRm-rmse-2      29.646961212158203
+   test/synthRm-rmse-4       33.70887756347656
+   test/synthRm-rmse-6       37.57258605957031
+  test/synthRm-rmse-all      32.93476104736328

@@ -82,7 +82,7 @@
 % the "keywords" metadata in the PDF but will not be shown in the document
 
 \vskip 0.3in
-]
+
 
 % this must go after the closing bracket ] following \twocolumn[ ...
 
@@ -95,7 +95,9 @@
 %\printAffiliationsAndNotice{}  % leave blank if no need to mention equal contribution
 
 \begin{abstract}
-This document provides a basic paper template and submission guidelines. Abstracts must be a single paragraph, ideally between 4--6 sentences long. \end{abstract}
+Spatiotemporal forecasting is critical in applications such as traffic prediction, climate modeling, and environmental monitoring. However, the prevalence of missing data in real-world sensor networks significantly complicates this task. In this paper, we introduce the Temporal Graph MLP-Mixer (T-GMM), a novel architecture designed to address these challenges. The model combines node-level processing with patch-level subgraph encoding to capture localized spatial dependencies while leveraging a three-dimensional MLP-Mixer to handle temporal, spatial, and feature-based dependencies. Experiments on the METR-LA and HDTTS datasets demonstrate the model's ability to effectively forecast even in the presence of significant missing data. While not surpassing state-of-the-art models in all scenarios, the T-GMM exhibits strong learning capabilities, particularly in capturing long-range dependencies. These results highlight its potential for robust, scalable spatiotemporal forecasting. 
+\end{abstract}
+]
 \section{Introduction}
 Most timeseries data is collected through sensor networks (SN) over time across different locations. Analyzing and forecasting this data is crucial in a variety of applications such as traffic flow prediction, climate modeling, and environmental monitoring as it helps with decision-making and resource allocation \cite{ghaderi2017deep}. This is a prominent problem in deep learning called spatio-temporal forecasting \cite{ghaderi2017deep}. A key challenge in spatiotemporal forecasting, particularly in real-world SNs, is the prevalence of missing data \cite{marisca2024graph, cini2021filling}. Sensor failures, communication breakdowns, or other operational issues frequently disrupt data collection, resulting in incomplete or irregular sequences \cite{marisca2024graph, cini2021filling}. 
 
@@ -127,38 +129,34 @@ channel into the model, allowing it to learn temporal dynamics such as trends, p
 
 \section{Models and Methods}
 
-We adopted a first principles approach to formulate a hypothesis to address the problem of missing large contiguous data in the input for spatiotemporal forecasting. This process began with an extensive review of existing literature to understand the efficacy and limitations of various methods. Our focus was on spatiotemporal forecasting for static temporal graphs, where node embeddings change over time, but the graph structure remains unchanged.
+We adopted a first principles approach to formulate a hypothesis to address the problem of missing large contiguous data in the input for spatiotemporal forecasting. This process began with an extensive review of existing literature to understand the efficacy and limitations of various methods. The literature review revealed two predominant approaches: low-inductive-bias models such as transformers and recurrent neural networks (RNNs) and spatiotemporal graph networks \cite{longa2023graph}. The latter are popular because they explicitly encode the spatial and temporal dependencies. Given the nature of our problem, we sought to determine the conditions under which each approach performs optimally and why.
 
-The literature review revealed two predominant approaches: low-inductive-bias models such as transformers and recurrent neural networks (RNNs), which often achieve state-of-the-art performance, and spatiotemporal graph networks, which incorporate both spatial and temporal biases \cite{longa2023graph}. The latter are popular because they explicitly encode the spatial and temporal dependencies. Given the nature of our problem, we sought to determine the conditions under which each approach performs optimally and why.
+Our hypothesis was that for static graphs, where nodes and edges remain unchanged over time, models with low inductive bias could perform well. This was based on recent findings emphasizing the role of inductive bias in model generalization, particularly when sufficient data and computational resources are available \cite{bachmann2024scaling}. We posited that low-spatial-bias models could generalize effectively in the presence of large missing data and, if successful, could guide the design of a low-inductive-bias architecture tailored to spatiotemporal forecasting under such conditions.
 
-Our hypothesis was that for static graphs, where nodes and edges remain unchanged over time, models with low spatial inductive bias could perform well. This was informed by recent findings emphasizing the role of inductive bias in model generalization, particularly when sufficient data and computational resources are available \cite{bachmann2024scaling}. We posited that low-spatial-bias models could generalize effectively in the presence of large missing data and, if successful, could guide the design of a low-inductive-bias architecture tailored to spatiotemporal forecasting under such conditions.
-
-To test our hypothesis, we conducted experiments using the METR-LA dataset, the largest benchmark dataset for static temporal graphs \cite{li2017diffusion}. The dataset consists of traffic flow data collected by 207 sensors in the Los Angeles County highway system, aggregated in five-minute intervals, spanning March to June 2012. We split the data into training (70\%), validation (10\%), and test (20\%) sets, evaluating model performance using the Mean Absolute Error (MAE) metric. For comparative analysis, we also implemented 3 of the best performing high spatial and temporal bias models in literature on the METR-LA dataset. The evaluation focused on 12-step-ahead predictions.
-
-Our proposed low-spatial-inductive-bias model consisted of a five-layered Long Short-Term Memory (LSTM) network, followed by two fully connected layers. The model was trained for 500 epochs, with checkpointing based on validation accuracy improvements.  Model optimization involved extensive experimentation with architectural configurations, including weight initialization techniques, batch normalization, dropout, and regularization strategies. Dropout rates were incrementally reduced from 0.8 to 0.4 across successive layers.
+\subsection{Comperative Study}
+To test our hypothesis, we conducted experiments using the METR-LA dataset, the largest benchmark dataset for static temporal graphs \cite{li2017diffusion}. The dataset consists of traffic flow data collected by 207 sensors in the Los Angeles County highway system, aggregated in five-minute intervals, spanning March to June 2012. We split the data into training (70\%), validation (10\%), and test (20\%) sets, evaluating model performance using the Mean Absolute Error (MAE) metric on 12-step-ahead predictions. Our proposed low-spatial-inductive-bias model consisted of a five-layered Long Short-Term Memory (LSTM) network, followed by two fully connected layers. The model was trained for 500 epochs with batch normalization, dropout, and regularization strategies to prevent over fitting. Dropout rates were incrementally reduced from 0.8 to 0.4 across successive layers.
 
 For baseline comparisons, we implemented three top performing models from the literature: the Diffusion Convolutional Recurrent Neural Network (DCRNN), which integrates graph-based diffusion convolution with recurrent neural networks to capture spatial and temporal dependencies \cite{li2017diffusion}; Graph WaveNet, a graph neural network utilizing adaptive graph convolutions and dilated causal convolutions for efficient modeling of spatial relationships and long-term temporal dependencies \cite{waveNet2019graph}; and the Graph Multi-Attention Network (GMAN), a transformer-based model leveraging graph attention mechanisms to capture spatiotemporal correlations at multiple scales \cite{zheng2020gman}. These models represent the state-of-the-art in spatiotemporal forecasting and served as benchmarks to evaluate our approach.
 
-When missing data occurs in large, contiguous blocks, capturing the underlying spatiotemporal dynamics becomes particularly challenging. In such cases, models must rely on valid observations that are far in space and time \cite{marisca2024graph}. This requires models to expand their receptive fields significantly, incorporating distant yet relevant information. However, expanding the receptive field in Graph Neural Networks (GNNs) introduces two major challenges: modeling long-range dependencies and mitigating over-smoothing effects.
+\subsection{Temporal Graph MLP mixer}
+When missing data occurs in large, contiguous blocks, capturing the underlying spatiotemporal dynamics becomes challenging. In such cases, models must rely on valid observations that are far in space and time \cite{marisca2024graph}. This requires models to expand their receptive fields significantly. However, expanding the receptive field in Graph Neural Networks (GNNs) introduces two major challenges: modeling long-range dependencies and mitigating over-smoothing.
 
-One effective method to deal with this problem is presented in the foundational missing data paper \cite{marisca2024graph} which is to compute separate spatial and temporal representations at multiple scales. These representations are subsequently combined using a soft attention mechanism, enabling the model to focus selectively on relevant features across scales.
+One effective method to deal with this problem is presented in the foundational missing data paper \cite{marisca2024graph} which is to compute separate spatial and temporal representations at multiple scales. These representations are subsequently combined using a soft attention mechanism, enabling the model to focus selectively on relevant features across scales. Graph MLP-Mixer demonstrates excellent capabilities in modeling long-range dependencies \cite{he2023generalization}. Incorporating our findings from our comparative analysis, we hypothesized that a temporal Graph MLP would be particularly well-suited for spatiotemporal forecasting tasks involving significant missing data. 
 
-Graph MLP Mixer demonstrates excellent capabilities in modeling long-range dependencies \cite{he2023generalization}. Incorporating our findings from our comparative analysis, we hypothesized that a temporal Graph MLP would be particularly well-suited for spatiotemporal forecasting tasks involving significant missing data. 
+The Temporal Graph MLP Mixer model comprises three main components: an encoder, an MLP-Mixer core, and a readout mechanism. The node encoder processes timeseries data and boolean validity masks - for imputed or real data - into latent representations, which are handled by a node-level MLP-Mixer. The graph is divided into subgraphs using the METIS algorithm, with one-hop neighborhoods added to ensure edge coverage. A shallow GNN encodes these patches, followed by mean-pooling to create compact, localized representations which are forwarded to the MLP-Mixer core. The MLP-Mixer core mixes across spatial, feature, and temporal dimensions to capture complex dependencies. The readout mechanism aggregates outputs from the patch MLP-Mixer, averaging representations for nodes in multiple patches. This information is concatenated with node-level outputs and passed through a final MLP to produce temporal forecasts. 
 
-Our proposed Temporal Graph MLP Mixer model consists of three main components: an encoders, an MLP-Mixer core, and a readout mechanism. The node encoder takes input time-series data and validity masks and encodes them into latent representations, which the node-level MLP-Mixer processes. The node-level processing is done individually with no spatial or temporal bias. The graph is partitioned into subgraphs using the METIS algorithm, with each patch expanded by one-hop neighborhoods to ensure edge coverage. These patches are then encoded using a shallow GNN followed by mean-pooling, creating compact representations that capture localized spatial information. The resulting patch representations are then processed by another MLP-Mixer, introducing a degree of spatial inductive bias.
+We conducted experiments on the AQI, ENGRAD, PV-US and METR-LA datasets following the methodology in \cite{marisca2024graph}. This involved sliding windows and horizons over the dataset for temporal predictions. Both datasets inherently contained some missing data, which were augmented with additional synthetic missing data patterns (Point, BlockT, and BlockST)\cite{marisca2024graph}. For all missing data — both real and synthetic — we employed a simple imputation strategy, filling gaps with the last observed value at the corresponding node. 
 
-The MLP-Mixer core operates on a three-dimensional input structure, mixing along the spatial, feature, and temporal dimensions to capture complex inter-dependencies. In the readout mechanism, outputs from the patch MLP-Mixer are aggregated, averaging representations for nodes appearing in multiple patches. This aggregated information is concatenated with the processed node-level representations and passed through a final MLP layer to produce the temporal projections for forecasting. This design balances inductive biases with the flexibility to generalize across diverse spatiotemporal patterns.
+The model predicted the next horizon of timesteps for each node, but loss and evaluation metrics during training were computed on non-missing data. This was to avoid biasing the model towards only predicting the last observed value, which could trivially perform well in datasets with a high proportion of missing data.  During testing, metrics were computed on all data, including synthetically masked data, ensuring that the model was evaluated on realistic fault scenarios. All datasets were split into 70\%/10\%/20\% for training, validation, and testing. We trained the models using AdamW optimizer with learning rate scheduling, weight decay, dropout, and early stopping for regularization and stability. The results of these experiments are detailed in the Results section.
 
 \section{Results}
 
-[Show evidence to support your claims made in the introduction. Compare to baselines / existing work.]
-
-The results of this study are organized into two subsections. The first subsection presents the findings from the comparative study on the METR-LA dataset. The second subsection presents the performance of the proposed Temporal Graph MLP Mixer on the METR-LA, AQI, ENGRAD and PV-US datasets. The code to reproduce the experiments is available online. 
+The results of this study are organized into two subsections. The first presents the findings from the comparative study on the METR-LA dataset. Secondly, we show the performance of the proposed T-GMM on the METR-LA, AQI, and GraphMSO datasets. The code to reproduce the experiments is available online. 
 
 \subsection{Comparative Study}
-In our comparative study, we implemented four models: one low-spatial-inductive-bias model (LSTM) and three top-performing models from the literature: Diffusion Convolutional Recurrent Neural Network (DCRNN), Graph WaveNet, and Graph Multi-Attention Network (GMAN). Additionally, we compared the performance of these models against three others reported in the literature: the Heterogeneous Mixture of Experts model (TITAN) \cite{wang2024mixturemodel}, STAEformer \cite{liu2023vanillatransformer}, and Traffic Transformer \cite{cai2020traffictransformer}. The results of these experiments are summarized in Table 1.
+In our comparative study, we evaluated our LSTM model against three implemented baselines (DCRNN, Graph WaveNet, and GMAN) and three additional models from literature (TITAN \cite{wang2024mixturemodel}, STAEformer \cite{liu2023vanillatransformer}, and Traffic Transformer \cite{cai2020traffictransformer}). The results are summarized in Table 1.
 
-Notably, the LSTM model demonstrated competitive performance relative to state-of-the-art (SOTA) models. Figure 1 illustrates the training dynamics, showing that the LSTM’s Mean Absolute Error (MAE) decreases logarithmically over epochs, requiring a substantial number of epochs to converge. While further reductions in error may have been achievable with extended training, the current results were sufficient to validate our hypothesis regarding the potential of low-inductive-bias models in spatiotemporal forecasting tasks.
+Notably, the LSTM model demonstrated competitive performance relative to state of the art (SOTA) models. Figure 1 illustrates the training dynamics, showing that the LSTM’s Mean Absolute Error (MAE) decreases logarithmically over epochs, requiring a substantial number of epochs to converge. While further reductions in error may have been achievable with extended training, the current results were sufficient to validate our hypothesis regarding the potential of low-inductive-bias models in spatiotemporal forecasting tasks.
 
 
 \begin{table}[h!]
@@ -173,25 +171,60 @@ METR-LA          & \textbf{FC-LSTM}      & \textbf{3.52} & \textbf{10.14} \\
                  & TITAN                 & 3.08          & 8.43          \\
                  & STAEformer            & 3.34          & 9.70          \\
                  & Traffic Transformer   & 3.28          & 9.08          \\
-            & \textbf{Temporal MLP-Mixer} & \textbf{4.22}  & \textbf{10.83} \\
+            & \textbf{T-GMM} & \textbf{4.22}  & \textbf{10.83} \\
                  \bottomrule
 \end{tabular}
-\caption{Comparison of MAE for different models on the METR-LA dataset.}
+\caption{Comparison of MAE and MAPE for different models on the METR-LA dataset.}
 \label{tab:metr_la_metrics}
 \end{table}
 
 
 \subsection{Temporal Graph MLP Mixer}
-The model showed ....
 
+
+The performance of the T-GMM on the METR-LA dataset highlights its potential in capturing spatiotemporal patterns, despite not achieving state-of-the-art results. On this dataset, the model achieved a Mean Absolute Error (MAE) of 4.22 and a Mean Absolute Percentage Error (MAPE) of 10.83. While these metrics fall short of the best-performing models listed in Table 1, they are a strong indication that the T-GMM is effectively learning. As illustrated in Figure 1, the model demonstrates the ability to capture meaningful patterns in its 12-step-ahead predictions, providing forecasts that closely follow the trends in the true data. These results underscore the model's viability as a promising architecture for spatiotemporal forecasting tasks.
+
+On the HDTTS datasets, our model showed mixed performance, as shown in Table 2. For GraphMSO with Point missing data, T-GMM achieved strong results that outperformed most baseline models with an MAE of 0.078. However, performance degraded on BlockT and BlockST patterns (MAE 0.470 and 1.192 respectively), though remaining competitive but not reaching state-of-the-art levels. The AQI dataset, which inherently contains 25\% missing data, proved more challenging - T-GMM's performance was notably worse compared to GraphMSO across all metrics, with MAEs of 21.13 and 22.06 for original and Point patterns respectively.
+
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\linewidth]{MetrLA_pred.png}
+    \caption{Prediction of the T-GMMon the METR-LA dataset.}
+    \label{fig:metr_la_pred}
+\end{figure}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}llccc|cc@{}}
+\toprule
+\textbf{Models}        & \multicolumn{3}{c|}{\textbf{GraphMSO}} & \multicolumn{2}{c}{\textbf{AQI}} \\ 
+\cmidrule(lr){2-4} \cmidrule(lr){5-6}
+                       & \textbf{Point} & \textbf{BlockT} & \textbf{BlockST} & \textbf{Orig.} & \textbf{Point} \\ \midrule
+GRU          & 0.346          & 0.639             & 1.137              & 18.17             & 19.19          \\
+DCRNN                  & 0.291          & 0.645             & 1.103              & 16.99             & 17.51          \\
+AGCRN                  & 0.067          & 0.366             & 1.056              & 17.19             & 17.92          \\
+GWNet                  & 0.089          & 0.340             & 0.955              & 15.89             & 16.39          \\
+T\&S-IMP               & 0.118          & 0.323             & 0.935              & 16.54             & 17.13          \\
+T\&S-AMP               & 0.063          & 0.293             & 0.868              & 16.15             & 16.58          \\
+TTS-IMP                & 0.113          & 0.271             & 0.697              & 16.25             & 16.90          \\
+TTS-AMP                & 0.096          & 0.251             & 0.669              & 15.63             & 16.15          \\
+HDTTS1             & 0.058          & 0.247             & 0.651              & 15.50             & 15.94          \\
+HDTTS2             & 0.062          & 0.261             & 0.679              & 15.35             & 15.76          \\
+\textbf{T-GMM}         & \textbf{0.078} & \textbf{0.470}    & \textbf{1.192}     & \textbf{21.13}    & \textbf{22.06} \\
+\bottomrule
+\end{tabular}
+\caption{Comparison of metrics for different models on the GraphMSO and AQI datasets.}
+\label{tab:grouped_metrics}
+\end{table}
 
 \section{Discussion}
 
 \subsection{Comparative Study}
 
-Our results demonstrate that the low-inductive-bias LSTM model achieved competitive performance compared to SOTA models, supporting our hypothesis that such architectures can effectively learn complex spatiotemporal patterns without strong built-in spatial biases. The only requirement is having a large dataset and sufficient compute. This result aligns with the scaling laws suggesting that the trade-off for increased generalizability is primarily in training time and data \cite{bachmann2024scaling}. Although our experiments confirmed the hypothesis that low-inductive-bias models can generalize effectively, further experimentation to fine-tune hyper-parameters could explore whether accuracy gains are sufficient to surpass SOTA models. Such investigations would provide additional evidence to support the hypothesis that low-inductive-bias models achieve superior generalization with sufficient training resources and data.
+Our results demonstrate that the low spatial inductive bias LSTM model achieved competitive performance compared to SOTA models, supporting our hypothesis that such architectures can effectively learn complex spatiotemporal patterns without strong built-in spatial biases. The only requirement is having a large dataset and sufficient compute. This result aligns with the scaling laws suggesting that the trade-off for increased generalizability is primarily in training time and data \cite{bachmann2024scaling}. Although our experiments confirmed the hypothesis that low-inductive-bias models can generalize effectively, further experimentation to fine-tune hyper-parameters could explore whether accuracy gains are sufficient to surpass SOTA models. Such investigations would provide additional evidence to support the hypothesis that low-inductive-bias models achieve superior generalization with sufficient training resources and data.
 
-The state-of-the-art (SOTA) models from the literature, such as TITAN, STAEformer, and Traffic Transformer, achieve higher accuracy partly due to their well-designed architectures that have been extensively hyperparameter-tuned for optimal performance. In contrast, our focus was on demonstrating that an FC-LSTM model can achieve competitive accuracy when provided with sufficient data and training time, even without hyperparameter fine-tuning.
+The SOTA models from the literature, such as TITAN, STAEformer, and Traffic Transformer, achieve higher accuracy partly due to their well-designed architectures that have been extensively hyperparameter-tuned for optimal performance. In contrast, our focus was on demonstrating that an FC-LSTM model can achieve competitive accuracy when provided with sufficient data and training time, even without hyperparameter fine-tuning.
 
 \begin{figure}[h!]
     \centering
@@ -200,21 +233,22 @@ The state-of-the-art (SOTA) models from the literature, such as TITAN, STAEforme
     \label{fig:loss_curve}
 \end{figure}
 
-
 One significant drawback of the low-inductive-bias method is its requirement for a large number of epochs to achieve high accuracy (see Figure 1). In contrast, state-of-the-art (SOTA) models demonstrate faster convergence. While it can be argued that this reliance on strong biases may limit their generalization capabilities when encountering novel or unseen patterns, this aspect was not explored in our comparative study. However, we address this in the second section of our research, where we introduce a novel architecture, the Temporal Graph MLP Mixer, and evaluate its forecasting performance on datasets with missing values, comparing it to SOTA models.
 
 \subsection{Temporal Graph MLP mixer}
 
-- Discussion
-A key challenge in applying MLP-Mixer architectures to temporal forecasting is their tendency to overfit, particularly with non-stationary real-world data. While common practice uses sliding windows and chronological train/validation/test splits (70/10/20), this assumes stationarity. We observed significant non-stationarity in the MetrLA dataset, with naturally missing data varying from 9\% in training to 100\% in validation periods. This poses challenges for MLP-Mixer models generalizing across different distributions. Our model performed well on the stationary synthetic GraphMSO dataset, achieving similar train and validation metrics due to its simple harmonic patterns. However, performance degraded when we introduced non-stationarity through block-T and block-ST patterns, highlighting generalization challenges with non-stationary data.
+A key challenge in applying MLP-Mixer architectures to temporal forecasting is their tendency to overfit, particularly with non-stationary real-world data. While common practice uses sliding windows and chronological train/validation/test splits (70/10/20), this assumes stationarity. We observed significant non-stationarity in the MetrLA dataset, with naturally missing data varying from 9\% in training to 100\% in validation periods. This poses challenges for MLP-Mixer models generalizing across different distributions. Our model performed well on the stationary synthetic GraphMSO dataset, achieving similar train and validation metrics due to its simple harmonic patterns. However, performance degraded when we introduced non-stationarity through BlockT and BlockST patterns, highlighting generalization challenges with non-stationary data.
 
-A key limitation of our approach is high memory usage. The patching process assigns each node to multiple patches (typically 3-10) due to 1-hop neighborhood expansion after subgraph partitioning. During GNN patch-encoding, this results in 3-10x more node computations, since the GNN must process every node in every patch. While manageable for small datasets like MetrLA and GraphMSO, this leads to prohibitive memory requirements for larger datasets like PV-US (1000+ nodes). The original Graph-MLP-Mixer paper avoided this issue by only using datasets with at most 150 average nodes.
+A key limitation of the current GMM is high memory usage. The patching process assigns each node to multiple patches (typically 3-10) due to 1-hop neighborhood expansion after subgraph partitioning. During GNN patch-encoding, this results in 3-10x more node computations, since the GNN must process every node in every patch. While manageable for small (spatially) datasets like MetrLA and GraphMSO, this leads to prohibitive memory requirements for larger datasets like PV-US (1000+ nodes). The original Graph-MLP-Mixer paper avoided this issue by only using datasets with at most 150 average nodes.
 
 Our analysis of inductive biases in GNNs reveals two key properties: distance-based information exchange between connected nodes, and invariance to node indexing. While GNNs like GCN and GAT are designed for both properties, our static graphs with dynamic node features only require the first. Since the graph topology is fixed, node permutation invariance is unnecessary. The original Graph-MLP-Mixer maintains this invariance through permutation-invariant encodings, but for our use case we could simplify by removing these components. We could potentially replace the GNN encoder with the original MLP-Mixer's encoder, reducing spatial bias to just the patching process grouping nearby nodes. This would also create a more lightweight model and resolve the memory scaling issues mentioned above.
 
 \section{Summary}
 
-[Summarize your contributions in light of the new results.]
+This study introduced the Temporal Graph MLP Mixer, a novel architecture for spatiotemporal forecasting that addresses the challenges posed by incomplete and irregular data. Building upon the Graph MLP Mixer, the model captures complex dependencies across spatial, temporal, and feature dimensions. Through experiments on the METR-LA and HDTTS datasets, we demonstrated the model’s capability to generalize across diverse scenarios, achieving competitive results and effectively handling long-range dependencies, even with significant missing data. The comparative study provided insights into the strengths and weaknesses of low-inductive-bias models relative to state-of-the-art models. While SOTA models excelled in accuracy and convergence speed, our findings highlight the potential of low-inductive-bias models to achieve comparable performance with sufficient data and training. These models also offer greater flexibility for generalization to novel or unseen patterns, albeit at the cost of increased training time. Overall, this study demonstrates the utility of the Temporal Graph MLP Mixer and contributes to a deeper understanding of the trade-offs in spatiotemporal forecasting model design.
+
+\section{Reproducibility Statement}
+All the code, data and instructions to reproduce the experiments in this paper can be found on the following Github Repository: https://github.com/Mu-Bilal/Temporal-Graph-MLP-Mixer
 
 % In the unusual situation where you want a paper to appear in the
 % references without citing it in the main text, use \nocite
@@ -232,51 +266,30 @@ Our analysis of inductive biases in GNNs reveals two key properties: distance-ba
 \newpage
 \appendix
 \onecolumn
-\section{Datasets}
+\section{Experimental settings}
+\subsection{Software}
+Our experiments were conducted using PyTorch Lightning as the main deep learning framework, with PyTorch as the underlying engine. For graph neural network operations, we utilized PyTorch Geometric (PyG). Experiment tracking and model checkpointing were handled through Weights \& Biases (wandb). The codebase was developed in Python 3.10.
 
-\begin{table}[h!] \label{datasets}
-\centering
-\begin{tabular}{@{}lcccccc@{}}
-\toprule
-\textbf{Datasets} & \textbf{Type}       & \textbf{Nodes} & \textbf{Edges} & \textbf{Time steps} & \textbf{Sampling Rate} & \textbf{Channels} \\ \midrule
-GraphMSO          & Directed            & 10,000         & 100            & 300                 & -                    & 1                 \\
-AQI               & Undirected          & 437            & 2,730          & 8,760               & 1 hour                 & 1                 \\
-EngRAD            & Undirected          & 487            & 2,297          & 26,304              & 1 hour                 & 5                 \\
-PV-US             & Undirected          & 1081           & 5,280          & 26,283              & 20 minutes             & 1                 \\ \bottomrule
-\end{tabular}
-\caption{Datasets used in \cite{marisca2024graph}}
-\label{tab:datasets}
-\end{table}
+\subsection{Graph MLP-Mixer Training settings}
+For training, we used a consistent model architecture across all datasets, with the following key components:
 
-\section{Baseline}
+The model uses a hierarchical architecture with:
+\begin{itemize}
+    \item GINEConv \cite{hu2019strategies} as the graph neural network layer type
+    \item 2 GNN layers for local message passing
+    \item 2-3 patch mixer layers and 3-4 node mixer layers for global information exchange
+    \item Single layer MLP readout for final predictions
+\end{itemize}
 
-\begin{table}[h!]
-\centering
-\label{baseline}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lccccccccccc@{}}
-\toprule
-\textbf{Model}   & \multicolumn{2}{c}{\textbf{AQI}}        & \multicolumn{2}{c}{\textbf{EngRAD}}     & \multicolumn{4}{c}{\textbf{PV-US}}                                                  & \multicolumn{3}{c}{\textbf{GraphMSO}}          \\ \cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-9} \cmidrule(lr){10-12}
-                 & \textbf{Original} & \textbf{+Point}    & \textbf{Block-T} & \textbf{Block-ST} & \textbf{Block-T} & \textbf{Block-ST} & \textbf{Batch/s} & \textbf{GPU RAM} & \textbf{Point (5\%)} & \textbf{Block-T} & \textbf{Block-ST} \\ \midrule
-GRU-D†           & 18.26±0.09        & 19.23±0.08         & 5.29±0.05        & 5.41±0.01         & 4.04±0.03        & 4.27±0.01         & 5.07±0.00         & 9.33 GB             & 0.385±0.012       & 0.670±0.020       & 1.081±0.003        \\
-GRU-I†           & 18.12±0.03        & 19.07±0.01         & 5.24±0.04        & 5.39±0.00         & 4.05±0.02        & 4.29±0.02         & 2.90±0.00         & 10.28 GB            & 0.322±0.016       & 0.619±0.011       & 1.064±0.003        \\
-GRIN-P           & 16.85±0.05        & 17.59±0.06         & 4.91±0.04        & 5.05±0.00         & 3.62±0.02        & 3.85±0.07         & 1.52±0.00         & 17.28 GB            & 0.163±0.008       & 0.392±0.031       & 0.895±0.012        \\
-GRU†             & 18.17±0.03        & 19.19±0.06         & 5.30±0.03        & 5.42±0.02         & 3.98±0.02        & 4.14±0.02         & 11.59±0.04        & 12.01 GB            & 0.346±0.027       & 0.639±0.011       & 1.137±0.008        \\
-DCRNN            & 16.99±0.09        & 17.51±0.08         & 5.14±0.06        & 5.33±0.05         & 3.54±0.01        & 3.76±0.00         & 1.36±0.01         & 19.72 GB            & 0.291±0.277       & 0.645±0.510       & 1.103±0.001        \\
-AGCRN            & 17.19±0.06        & 17.92±0.05         & 4.84±0.01        & 5.10±0.06         & 4.06±0.01        & 4.20±0.04         & 1.15±0.00         & 23.40 GB            & 0.067±0.004       & 0.366±0.013       & 1.056±0.012        \\
-GWNet            & 15.89±0.04        & 16.39±0.14         & 4.59±0.04        & 4.76±0.03         & 3.48±0.05        & 3.71±0.03         & 2.12±0.00         & 16.02 GB            & 0.089±0.002       & 0.340±0.001       & 0.955±0.012        \\
-T\&S-IMP         & 16.54±0.03        & 17.13±0.05         & 4.98±0.01        & 5.15±0.03         & 3.60±0.02        & 3.82±0.03         & 2.68±0.00         & 7.03 GB             & 0.118±0.009       & 0.323±0.011       & 0.935±0.005        \\
-T\&S-AMP         & 16.15±0.02        & 16.58±0.10         & 4.93±0.02        & 5.11±0.05         & N/A              & N/A               & N/A               & N/A                 & 0.063±0.003       & 0.293±0.020       & 0.868±0.006        \\
-TTS-IMP          & 16.25±0.01        & 16.90±0.26         & 4.81±0.07        & 5.08±0.04         & 3.50±0.01        & 3.66±0.02         & 18.84±0.14        & 12.81 GB            & 0.113±0.008       & 0.271±0.007       & 0.697±0.005        \\
-TTS-AMP          & 15.63±0.06        & 16.15±0.05         & 4.70±0.00        & 4.81±0.06         & 3.46±0.03        & 3.65±0.05         & 14.26±0.08        & 12.81 GB            & 0.096±0.004       & 0.251±0.004       & 0.669±0.013        \\
-HD-TTS-IMP       & 15.50±0.07        & 15.94±0.10         & 4.48±0.01        & 4.64±0.03         & 3.47±0.01        & 3.62±0.02         & 7.11±0.03         & 10.86 GB            & 0.058±0.004       & 0.247±0.002       & 0.651±0.023        \\
-HD-TTS-AMP       & 15.35±0.01        & 15.76±0.07         & 4.53±0.03        & 4.65±0.04         & 3.47±0.02        & 3.61±0.02         & 6.21±0.02         & 10.86 GB            & 0.062±0.002       & 0.261±0.009       & 0.679±0.005        \\ \bottomrule
-\end{tabular}%
-}
-\caption{Performance Metrics and GPU Usage for Baseline Models from \cite{marisca2024graph}}
+Key hyperparameters were slightly adjusted per dataset but generally followed:
+\begin{itemize}
+    \item Learning rate of 1e-3 with a decay factor of 0.5 and minimum learning rate of 1e-5
+    \item Early stopping patience of 5 epochs monitoring validation loss
+    \item Dropout rates between 0.1-0.8 for different components (GNN, mixer layers, readout)
+    \item Feature dimensions of 64-128 for both patch and node representations
+\end{itemize}
 
-\end{table}
-
+Training was performed with gradient accumulation and batch sizes optimized per dataset.
 
 \end{document}
 

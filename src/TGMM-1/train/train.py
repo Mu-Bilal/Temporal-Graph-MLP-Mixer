@@ -75,7 +75,7 @@ def train_model(cfg):
 
     checkpoint_callback = ModelCheckpoint(
         filename='{epoch}',
-        save_top_k=2,
+        save_top_k=1,
         monitor=cfg.train.monitor,
         mode='min',
         save_last=True,
