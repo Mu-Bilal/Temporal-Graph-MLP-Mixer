@@ -62,18 +62,13 @@ class StaticGraphTopologyData(object):
     def __str__(self):
         return self.__repr__()
     
-def create_sliding_window_dataset(data, window, delay, horizon, stride, max_steps=None, max_allowed_mem=8):
+def create_sliding_window_dataset(data, window, delay, horizon, stride, max_steps=None):
     steps = data.shape[0] - window - delay - horizon
     n_nodes = data.shape[1]
 
     if max_steps is not None:
         steps = min(steps, max_steps)
-
-    # Calc memory needed
-    memory_needed = (window + horizon) * steps * n_nodes * 8 * 1e-9  # GB
-    print(f"Predicted raw dataset size: {memory_needed:.2f} GB")
-    assert memory_needed <= max_allowed_mem, f"Memory needed ({memory_needed:.2f} GB) exceeds max allowed memory ({max_allowed_mem} GB)"
-
+        
     x_idx = np.arange(window)[np.newaxis, :] + np.arange(steps, step=stride)[:, np.newaxis]  # (batch_size, window, n_features)
     y_idx = np.arange(window+delay+1, window+delay+horizon+1)[np.newaxis, :] + np.arange(steps, step=stride)[:, np.newaxis]  # (batch_size, horizon, n_features)
     assert x_idx.shape[0] == y_idx.shape[0]

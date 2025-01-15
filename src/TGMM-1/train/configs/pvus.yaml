@@ -25,8 +25,8 @@ dataset:
   max_len: null
   train_size: 0.7
   val_size: 0.1
-  horizon: 12
-  window: 12
+  horizon: 6
+  window: 76
   stride: 1
   delay: 0
   normalize: True
@@ -86,6 +86,6 @@ metis:
   num_hops: 1  # expanding patches with k hop neighbourhood
 
 logging:
-  log_horizons: [3, 6, 12, "all"]
+  log_horizons: [2, 4, 6, "all"]
   # if this is True the matrics `stage/all-metric` will have invalid data (present in original dataset, imputed during cleaning) ignored. Independent of this, the metrics `stage/synthRm-metric` have synthetically missing data and originally missing data (both imputed during cleaning) ignored.
   ignore_invalid: True  
