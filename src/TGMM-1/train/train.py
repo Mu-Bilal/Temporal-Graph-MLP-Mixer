@@ -104,6 +104,6 @@ def train_model(cfg):
         wandb.finish()
 
 if __name__ == '__main__':
-    dataset = 'la'
+    dataset = 'pvus'
     cfg = load_config(configs_dir='/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/configs', dataset_name=dataset)
     train_model(cfg)

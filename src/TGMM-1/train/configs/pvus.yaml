@@ -1,6 +1,35 @@
-# FALLBACK CONFIG
 project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
+
+raw_data:  # HDTTS data pipeline settings
+  name: pvus_block_t  # dataset_failureMode
+  mode:  # Part of missing data algo. Merged with configs/mode
+    seed: 1082  # also number of nodes
+    min_seq: 6  # 2 hours
+    max_seq: 21 # 7 hours
+  connectivity:  # From HDTTS
+    force_symmetric: true
+    include_self: false
+    knn: 8
+    layout: csr
+    method: distance
+    theta: 150
+    threshold: 0.1
+  make_graph_connected: True
+  hparams:
+    freq: 20T
+    mask_zeros: true
+    zones: west
+
+dataset:
+  max_len: null
+  train_size: 0.7
+  val_size: 0.1
+  horizon: 12
+  window: 12
+  stride: 1
+  delay: 0
+  normalize: True
 
 train:
   batch_size: 16  # Total graph mini-batch size

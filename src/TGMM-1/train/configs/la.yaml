@@ -23,7 +23,6 @@ dataset:
   window: 12
   stride: 1
   delay: 0
-  EngRADchannel: 0
   normalize: True
 
 train:

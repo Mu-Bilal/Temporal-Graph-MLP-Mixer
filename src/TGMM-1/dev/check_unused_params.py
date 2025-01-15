@@ -11,7 +11,7 @@ from train.configs.utils import load_config
 
 def single_forward_backward():
     print('Loading config...')
-    cfg = load_config(configs_dir='src/TGMM-1/train/configs', dataset_name='la')
+    cfg = load_config(configs_dir='src/TGMM-1/train/configs', dataset_name='pvus')
     
     # Override config values
     cfg.train.batch_size = 2
@@ -27,14 +27,14 @@ def single_forward_backward():
 
     print('Getting batch...')
     for batch in train_loader:
-        x, y, mask_x, mask_y = batch
+        x, y, mask_x, mask_y, mask_y_synth = batch
         print(f'{x.shape = }')
         break
 
     print('Running forward pass...')
-    y_pred = model.forward(x)
+    y_pred = model.forward(x, mask_x)
     loss = model.criterion(y_pred, y)
-    metrics = model.calc_metrics(y_pred, y, key_prefix='train')
+    metrics = model.calc_metrics(y_pred, y, prefix='train/')
     metrics.update({'train/loss': loss})
 
     print('Running backward pass...')
