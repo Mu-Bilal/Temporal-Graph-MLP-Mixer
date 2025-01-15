@@ -2,7 +2,7 @@ project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
 raw_data:  # HDTTS data pipeline settings
-  name: mso_block_t  # dataset_failureMode
+  name: mso_block_st  # dataset_failureMode
   connectivity:
     include_self: False
     layout: csr
@@ -44,13 +44,13 @@ train:
   lr_decay: 0.5  # learning rate decay factor
   min_lr: 1.0e-5  # A lower bound on the learning rate.
   early_stop_patience: 5
-  monitor: train/loss  # Metric to monitor
+  monitor: valid/loss  # Metric to monitor
 
-  wd: 1e-2  # L2 regularization, weight decay
-  dropout_gnn: 0.5  # Dropout rate
-  dropout_readout: 0.4  # Dropout rate for Readout
-  dropout_patch_mixer: 0.4  # Dropout rate for patch MLPMixer
-  dropout_node_mixer: 0.3  # Dropout rate for node MLPMixer
+  wd: 1e-4  # L2 regularization, weight decay
+  dropout_gnn: 0.0  # Dropout rate
+  dropout_patch_mixer: 0.0  # Dropout rate for patch MLPMixer
+  dropout_node_mixer: 0.0  # Dropout rate for node MLPMixer
+  dropout_readout: 0.0  # Dropout rate for Readout
 
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options
