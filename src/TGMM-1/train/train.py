@@ -95,7 +95,8 @@ def train_model(cfg):
         gradient_clip_val=5.0,
         callbacks=[checkpoint_callback, early_stop_callback, MiscCallback()],
         strategy=strategy,
-        devices=devices
+        devices=devices,
+        accumulate_grad_batches=cfg.train.accumulate_grad_batches
     )
     
     trainer.fit(model, train_loader, val_loader)
@@ -104,6 +105,6 @@ def train_model(cfg):
         wandb.finish()
 
 if __name__ == '__main__':
-    dataset = 'pvus'
+    dataset = 'air'
     cfg = load_config(configs_dir='/home/lc865/workspace/DL-GNNs/Temporal-Graph-MLP-Mixer/src/TGMM-1/train/configs', dataset_name=dataset)
     train_model(cfg)

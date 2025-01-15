@@ -2,32 +2,32 @@ project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
 raw_data:  # HDTTS data pipeline settings
-  name: la_block_st  # dataset_failureMode
+  name: air_normal  # dataset_failureMode
   mode:  # Part of missing data algo. Merged with configs/mode
-    seed: 207  # 9101112
-    min_seq: 12  # 1 hour
-    max_seq: 48  # 4 hours
-  connectivity:
+    seed: 437   # also number of nodes
+    min_seq: 4  # 4 hours
+    max_seq: 12 # 12 hours
+  connectivity:  # From HDTTS
     method: distance
     threshold: 0.1
     include_self: False
     layout: csr
-  make_graph_connected: False
+  make_graph_connected: True
   hparams: {}
 
 dataset:
   max_len: null
   train_size: 0.7
   val_size: 0.1
-  horizon: 12
-  window: 12
+  horizon: 6
+  window: 24
   stride: 1
   delay: 0
   normalize: True
 
 train:
-  batch_size: 16  # Total graph mini-batch size
-  accumulate_grad_batches: 1
+  batch_size: 8  # Total graph mini-batch size
+  accumulate_grad_batches: 2
   epochs: 10  # Maximal number of epochs
 
   # If this is True, missing (imputed) values are ignored when computing prediction loss (independent of metrics, see `logging` below)
@@ -37,7 +37,9 @@ train:
   lr_patience: 10  # number of steps before reduce learning rate
   lr_decay: 0.5  # learning rate decay factor
   min_lr: 1.0e-5  # A lower bound on the learning rate.
+
   early_stop_patience: 5
+
   monitor: valid/loss  # Metric to monitor
 
   wd: 2e-1  # L2 regularization, weight decay
@@ -72,13 +74,13 @@ pos_enc:
   patch_num_diff: -1  # Patch PE diffusion steps
 
 # Metis patch extraction options
-metis:
+metis: # 1082 nodes in PvUS dataset
   enable: True  # Enable Metis partition (otherwise use random partition)
   online: False  # Enable data augmentation
-  n_patches: 80  # The number of partitions
+  n_patches: 400  # The number of partitions
   num_hops: 1  # expanding patches with k hop neighbourhood
 
 logging:
-  log_horizons: [3, 6, 12, "all"]
+  log_horizons: [2, 4, 6, "all"]
   # if this is True the matrics `stage/all-metric` will have invalid data (present in original dataset, imputed during cleaning) ignored. Independent of this, the metrics `stage/synthRm-metric` have synthetically missing data and originally missing data (both imputed during cleaning) ignored.
   ignore_invalid: True  

@@ -136,8 +136,11 @@ class GMMModel(LightningModule):
         Loss and metrics should only be computed for valid_y_synth as this is the data that would be available in a real-world scenario.
         """
         x, y, valid_x, valid_y, valid_y_synth = batch
-        y_pred = self.forward(x, valid_x)  # (batch_size, n_nodes*n_timesteps)
 
+        if self.cfg.train.mask_loss and not torch.any(valid_y_synth):
+            print("No valid data in batch")
+            return None
+        y_pred = self.forward(x, valid_x)  # (batch_size, n_nodes*n_timesteps)
         loss = self.criterion(y_pred[valid_y_synth], y[valid_y_synth]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
 
         metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='train/all-', ignore_masked=self.cfg.logging.ignore_invalid)
@@ -148,11 +151,11 @@ class GMMModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y, valid_x, valid_y, valid_y_synth = batch
-        y_pred = self.forward(x, valid_x)
 
-        if self.cfg.train.mask_loss and not torch.any(valid_y):
+        if self.cfg.train.mask_loss and not torch.any(valid_y_synth):
             return None
 
+        y_pred = self.forward(x, valid_x)
         loss = self.criterion(y_pred[valid_y_synth], y[valid_y_synth]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
 
         metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='valid/all-', ignore_masked=self.cfg.logging.ignore_invalid)
@@ -164,11 +167,11 @@ class GMMModel(LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y, valid_x, valid_y, valid_y_synth = batch
-        y_pred = self.forward(x, valid_x)
 
-        if self.cfg.train.mask_loss and not torch.any(valid_y):
+        if self.cfg.train.mask_loss and not torch.any(valid_y_synth):
             return None
-
+    
+        y_pred = self.forward(x, valid_x)
         loss = self.criterion(y_pred[valid_y_synth], y[valid_y_synth]) if self.cfg.train.mask_loss else self.criterion(y_pred, y) # FIXME: See below
 
         metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='test/all-', ignore_masked=self.cfg.logging.ignore_invalid)  # FIXME: Calculate metrics differently here.
@@ -241,6 +244,9 @@ class GMMModel(LightningModule):
         }
         
     def on_train_batch_end(self, outputs, batch, batch_idx):
+        if 'loss' not in outputs.keys():  # Batch without any valid data
+            return
+        
         if torch.isnan(outputs['loss']):
             raise ValueError("NaN detected in training loss")
 
@@ -261,13 +267,8 @@ class GMMModel(LightningModule):
         if len(buffer) == 0:
             return
         
-        if 'valid/missing_rate' in buffer[0]:
-            missing_rate = [step_metric['valid/missing_rate'] for step_metric in buffer]
-            print(f'missing_rate: {missing_rate}')
-            print(f'missing_rate mean: {sum(missing_rate) / len(missing_rate)}')
-
         # Average the metrics over the last N steps
-        avg_metrics = {k: sum(step_dict[k] for step_dict in buffer) / len(buffer) for k in buffer[0]}
+        avg_metrics = {k: sum(step_dict[k] for step_dict in buffer if k in step_dict) / len(buffer) for k in buffer[0]}
 
         # Log the averaged metrics and clear the buffer
         self.log_dict(avg_metrics, batch_size=len(buffer), sync_dist=True)

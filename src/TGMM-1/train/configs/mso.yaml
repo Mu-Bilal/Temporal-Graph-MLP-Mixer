@@ -7,19 +7,19 @@ raw_data:  # HDTTS data pipeline settings
     include_self: False
     layout: csr
   hparams:  # Needed here for synthetic dataset creation
-    cached: True
-    graph_generator: knn3
-    max_neighbors: 5
-    max_seq: 48
-    min_seq: 8
     n_nodes: 100
     n_steps: 10000
+    spatial_order: 3
+    graph_generator: "knn3"
     noise: 0.0
+    propagate_mask: False
+    cached: True
     p_fault: 0
     p_noise: 0.05
-    propagate_mask: False
+    min_seq: 8
+    max_seq: 48
     seed: 123
-    spatial_order: 3
+    max_neighbors: 5
 
 dataset:
   max_len: null
@@ -33,6 +33,7 @@ dataset:
 
 train:
   batch_size: 16  # Total graph mini-batch size
+  accumulate_grad_batches: 1
   epochs: 10  # Maximal number of epochs
 
   # If this is True, missing (imputed) values are ignored when computing prediction loss (independent of metrics, see `logging` below)
@@ -42,9 +43,7 @@ train:
   lr_patience: 10  # number of steps before reduce learning rate
   lr_decay: 0.5  # learning rate decay factor
   min_lr: 1.0e-5  # A lower bound on the learning rate.
-
   early_stop_patience: 5
-
   monitor: valid/loss  # Metric to monitor
 
   wd: 2e-1  # L2 regularization, weight decay
