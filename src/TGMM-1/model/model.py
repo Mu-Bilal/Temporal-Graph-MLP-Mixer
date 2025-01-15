@@ -147,7 +147,7 @@ class GMMModel(LightningModule):
 
         metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='valid', ignore_masked=self.cfg.logging.ignore_invalid)
         metrics.update({'valid/loss': loss})
-        self.log_dict(metrics, on_step=False, on_epoch=True)
+        self.log_dict(metrics, on_step=False, on_epoch=True, sync_dist=True)
 
         return {'loss': loss, 'step_metrics': metrics}
 
@@ -162,7 +162,7 @@ class GMMModel(LightningModule):
 
         metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='test', ignore_masked=self.cfg.logging.ignore_invalid)  # FIXME: Calculate metrics differently here.
         metrics.update({'test/loss': loss})
-        self.log_dict(metrics, on_step=False, on_epoch=True)
+        self.log_dict(metrics, on_step=False, on_epoch=True, sync_dist=True)
 
         return {'loss': loss, 'step_metrics': metrics}
     
