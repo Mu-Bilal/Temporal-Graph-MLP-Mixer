@@ -32,8 +32,9 @@ class GMMModel(LightningModule):
         # Shortcuts 
         self.pooling = cfg.model.pool
 
-        self.input_encoder_patch = nn.Linear(1, cfg.model.nfeatures_patch)
-        self.input_encoder_node = nn.Linear(1, cfg.model.nfeatures_node)
+        input_dim = 2 if cfg.model.add_valid_mask else 1  # TODO: Assuming univariate for now. Change later.
+        self.input_encoder_patch = nn.Linear(input_dim, cfg.model.nfeatures_patch)
+        self.input_encoder_node = nn.Linear(input_dim, cfg.model.nfeatures_node)
         self.edge_encoder = nn.Linear(1, cfg.model.nfeatures_patch)
 
         self.gnns = nn.ModuleList([
@@ -87,10 +88,13 @@ class GMMModel(LightningModule):
                 if isinstance(attr, torch.Tensor):
                     setattr(obj, attr_name, attr.to(self.device))
     
-    def forward(self, x):
-        x_raw = x        
-        x = rearrange(self.input_encoder_patch(x_raw.unsqueeze(-1)), 'B n t f -> B t n f')
-        nodes_x = rearrange(self.input_encoder_node(x_raw.unsqueeze(-1)), 'B n t f -> B t n f')
+    def forward(self, x_raw, valid_x):
+        # Encoder: Collects data (and valid mask) and transforms it into larger latent representation
+        x_in = torch.stack([x_raw, valid_x], dim=-1) if self.cfg.model.add_valid_mask else x_raw.unsqueeze(-1)
+        x = rearrange(self.input_encoder_patch(x_in), 'B n t f -> B t n f')
+        nodes_x = rearrange(self.input_encoder_node(x_in), 'B n t f -> B t n f')
+        
+        # Edge encoder: Encodes edge weights into larger latent representation to be used for GNNs
         edge_weight = self.edge_encoder(self.topo_data.edge_weight.unsqueeze(-1)).unsqueeze(0).unsqueeze(0).repeat(x.shape[0], x.shape[1], 1, 1)  # Add time dimension
 
         # Patch Encoder
@@ -132,7 +136,7 @@ class GMMModel(LightningModule):
         Loss and metrics should only be computed for valid_y_synth as this is the data that would be available in a real-world scenario.
         """
         x, y, valid_x, valid_y, valid_y_synth = batch
-        y_pred = self.forward(x)  # (batch_size, n_nodes*n_timesteps)
+        y_pred = self.forward(x, valid_x)  # (batch_size, n_nodes*n_timesteps)
 
         loss = self.criterion(y_pred[valid_y_synth], y[valid_y_synth]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
 
@@ -144,7 +148,7 @@ class GMMModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y, valid_x, valid_y, valid_y_synth = batch
-        y_pred = self.forward(x)
+        y_pred = self.forward(x, valid_x)
 
         if self.cfg.train.mask_loss and not torch.any(valid_y):
             return None
@@ -160,7 +164,7 @@ class GMMModel(LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y, valid_x, valid_y, valid_y_synth = batch
-        y_pred = self.forward(x)
+        y_pred = self.forward(x, valid_x)
 
         if self.cfg.train.mask_loss and not torch.any(valid_y):
             return None
@@ -215,7 +219,7 @@ class GMMModel(LightningModule):
         metrics = {}
         for horizon in self.log_horizons:
             metrics.update(self._calc_metrics_for_horizon(pred, targets, valid_mask, horizon, ignore_masked, prefix))
-        metrics.update({f'{prefix}/missing_rate': torch.mean((~valid_mask).float())})
+        metrics.update({f'{prefix}missing_rate': torch.mean((~valid_mask).float())})
         return metrics
     
     def configure_optimizers(self):

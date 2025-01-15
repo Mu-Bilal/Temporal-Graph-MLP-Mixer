@@ -72,7 +72,7 @@ def train_model(cfg):
     checkpoint_callback = ModelCheckpoint(
         #  dirpath='/mnt/cephfs/store/gr-mc2473/lc865/workspace/GNN/checkpoints', Supplied later
         filename='{epoch}',
-        save_top_k=0,
+        save_top_k=1,
         monitor=cfg.train.monitor,
         mode='min',
         save_last=True,

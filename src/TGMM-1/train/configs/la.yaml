@@ -2,7 +2,7 @@ project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
 raw_data:  # HDTTS data pipeline settings
-  name: la_block_t  # dataset_failureMode
+  name: la_block_st  # dataset_failureMode
   mode:  # Part of missing data algo. Merged with configs/mode
     seed: 207  # 9101112
     min_seq: 12  # 1 hour
@@ -30,7 +30,8 @@ train:
   batch_size: 16  # Total graph mini-batch size
   epochs: 10  # Maximal number of epochs
 
-  mask_loss: True  # If this is True, imputed values are ignored when computing prediction loss (independent of metrics, see `logging` below)
+  # If this is True, missing (imputed) values are ignored when computing prediction loss (independent of metrics, see `logging` below)
+  mask_loss: True  
 
   lr: 1e-3  # Base learning rate
   lr_patience: 10  # number of steps before reduce learning rate
@@ -50,6 +51,8 @@ train:
 model:
   gnn_type: GINEConv  # GNN type used, see core.model_utils.pyg_gnn_wrapper for all options
   gMHA_type: MLPMixer  # GraphMLPMixer or graph-based multihead attention: [MLPMixer, Hadamard, Standard, Graph, Addictive, Kernel]
+
+  add_valid_mask: True  # Adds mask specifying if observation is valid (or invalid and hence imputed) to model input
   
   nfeatures_patch: 128  # Number of features for patch mixer
   nfeatures_node: 64  # Number of features for node mixer

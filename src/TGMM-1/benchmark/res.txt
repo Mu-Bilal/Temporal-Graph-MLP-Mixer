@@ -1,0 +1,59 @@
+
+
+lrea5l3w, MetrLA, BlockT
+     test/all-mae-12         4.570441246032715
+     test/all-mae-3         3.9905028343200684
+     test/all-mae-6          4.154966831207275
+    test/all-mae-all         4.211167812347412
+    test/all-mape-12        12.257962226867676
+     test/all-mape-3         9.983138084411621
+     test/all-mape-6        10.613752365112305
+    test/all-mape-all       10.860472679138184
+  test/all-missing_rate    0.059587497264146805
+    test/all-rmse-12         8.138527870178223
+     test/all-rmse-3        6.8834614753723145
+     test/all-rmse-6         7.347716808319092
+    test/all-rmse-all        7.451472759246826
+        test/loss           0.31403619050979614
+   test/synthRm-mae-12       4.536378383636475
+   test/synthRm-mae-3       3.8913450241088867
+   test/synthRm-mae-6        4.088795185089111
+  test/synthRm-mae-all       4.140674591064453
+  test/synthRm-mape-12      12.205850601196289
+   test/synthRm-mape-3       9.680022239685059
+   test/synthRm-mape-6      10.423941612243652
+  test/synthRm-mape-all     10.665997505187988
+test/synthRm-missing_rate   0.33658915758132935
+  test/synthRm-rmse-12       8.082685470581055
+   test/synthRm-rmse-3       6.711757659912109
+   test/synthRm-rmse-6       7.230844974517822
+  test/synthRm-rmse-all      7.334959030151367
+
+sj2mggec, MetrLA, BlockST
+     test/all-mae-12         4.77174186706543
+     test/all-mae-3          4.073730945587158
+     test/all-mae-6          4.319094657897949
+    test/all-mae-all         4.387927055358887
+    test/all-mape-12        13.338010787963867
+     test/all-mape-3         11.20315933227539
+     test/all-mape-6        11.950843811035156
+    test/all-mape-all        12.1202974319458
+  test/all-missing_rate    0.059587497264146805
+    test/all-rmse-12         8.701056480407715
+     test/all-rmse-3         7.371253967285156
+     test/all-rmse-6         7.860663414001465
+    test/all-rmse-all        8.008139610290527
+        test/loss           0.3130187690258026
+   test/synthRm-mae-12       4.589415550231934
+   test/synthRm-mae-3        3.772937059402466
+   test/synthRm-mae-6       4.0764384269714355
+  test/synthRm-mae-all       4.141099452972412
+  test/synthRm-mape-12      12.791175842285156
+   test/synthRm-mape-3      10.124345779418945
+   test/synthRm-mape-6      11.108604431152344
+  test/synthRm-mape-all     11.257421493530273
+test/synthRm-missing_rate   0.4705088436603546
+  test/synthRm-rmse-12       8.337638854980469
+   test/synthRm-rmse-3       6.79472541809082
+   test/synthRm-rmse-6       7.387988567352295
+  test/synthRm-rmse-all      7.539520740509033
