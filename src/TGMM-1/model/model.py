@@ -126,12 +126,18 @@ class GMMModel(LightningModule):
         return out
 
     def training_step(self, batch, batch_idx):
+        """
+        x has synthetic failures removed, y does not. valid_x contains synthetic failures as does valid_y_synth. valid_y does not.
+
+        Loss and metrics should only be computed for valid_y_synth as this is the data that would be available in a real-world scenario.
+        """
         x, y, valid_x, valid_y, valid_y_synth = batch
         y_pred = self.forward(x)  # (batch_size, n_nodes*n_timesteps)
 
-        loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
+        loss = self.criterion(y_pred[valid_y_synth], y[valid_y_synth]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
 
-        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='train', ignore_masked=self.cfg.logging.ignore_invalid)
+        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='train/all-', ignore_masked=self.cfg.logging.ignore_invalid)
+        metrics.update(self.calc_metrics(y_pred, y, valid_mask=valid_y_synth, prefix='train/synthRm-', ignore_masked=True))
         metrics.update({'train/loss': loss, 'train/lr': self.optimizers().param_groups[0]['lr']})
 
         return {'loss': loss, 'step_metrics': metrics}  # Log via external method so we can have a balance between on_step and on_epoch logging
@@ -143,9 +149,10 @@ class GMMModel(LightningModule):
         if self.cfg.train.mask_loss and not torch.any(valid_y):
             return None
 
-        loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
+        loss = self.criterion(y_pred[valid_y_synth], y[valid_y_synth]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
 
-        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='valid', ignore_masked=self.cfg.logging.ignore_invalid)
+        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='valid/all-', ignore_masked=self.cfg.logging.ignore_invalid)
+        metrics.update(self.calc_metrics(y_pred, y, valid_mask=valid_y_synth, prefix='valid/synthRm-', ignore_masked=True))
         metrics.update({'valid/loss': loss})
         self.log_dict(metrics, on_step=False, on_epoch=True, sync_dist=True)
 
@@ -158,10 +165,12 @@ class GMMModel(LightningModule):
         if self.cfg.train.mask_loss and not torch.any(valid_y):
             return None
 
-        loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y) # FIXME: See below
+        loss = self.criterion(y_pred[valid_y_synth], y[valid_y_synth]) if self.cfg.train.mask_loss else self.criterion(y_pred, y) # FIXME: See below
 
-        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='test', ignore_masked=self.cfg.logging.ignore_invalid)  # FIXME: Calculate metrics differently here.
+        metrics = self.calc_metrics(y_pred, y, valid_mask=valid_y, prefix='test/all-', ignore_masked=self.cfg.logging.ignore_invalid)  # FIXME: Calculate metrics differently here.
+        metrics.update(self.calc_metrics(y_pred, y, valid_mask=valid_y_synth, prefix='test/synthRm-', ignore_masked=True))
         metrics.update({'test/loss': loss})
+
         self.log_dict(metrics, on_step=False, on_epoch=True, sync_dist=True)
 
         return {'loss': loss, 'step_metrics': metrics}
@@ -190,9 +199,9 @@ class GMMModel(LightningModule):
         mape = 100*torch.mean(torch.abs((pred_horizon - targets_horizon) / targets_horizon)) if torch.any(targets_horizon != 0) else float('nan')
         
         return {
-            f'{prefix}/mae-{horizon}': mae,
-            f'{prefix}/rmse-{horizon}': rmse, 
-            f'{prefix}/mape-{horizon}': mape,
+            f'{prefix}mae-{horizon}': mae,
+            f'{prefix}rmse-{horizon}': rmse, 
+            f'{prefix}mape-{horizon}': mape,
         }
 
     def calc_metrics(self, pred: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor = None, prefix='valid', ignore_masked=True):
