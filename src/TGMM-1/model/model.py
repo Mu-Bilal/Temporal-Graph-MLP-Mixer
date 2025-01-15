@@ -126,7 +126,7 @@ class GMMModel(LightningModule):
         return out
 
     def training_step(self, batch, batch_idx):
-        x, y, valid_x, valid_y = batch
+        x, y, valid_x, valid_y, valid_y_synth = batch
         y_pred = self.forward(x)  # (batch_size, n_nodes*n_timesteps)
 
         loss = self.criterion(y_pred[valid_y], y[valid_y]) if self.cfg.train.mask_loss else self.criterion(y_pred, y)
@@ -137,7 +137,7 @@ class GMMModel(LightningModule):
         return {'loss': loss, 'step_metrics': metrics}  # Log via external method so we can have a balance between on_step and on_epoch logging
 
     def validation_step(self, batch, batch_idx):
-        x, y, valid_x, valid_y = batch
+        x, y, valid_x, valid_y, valid_y_synth = batch
         y_pred = self.forward(x)
 
         if self.cfg.train.mask_loss and not torch.any(valid_y):
@@ -152,7 +152,7 @@ class GMMModel(LightningModule):
         return {'loss': loss, 'step_metrics': metrics}
 
     def test_step(self, batch, batch_idx):
-        x, y, valid_x, valid_y = batch
+        x, y, valid_x, valid_y, valid_y_synth = batch
         y_pred = self.forward(x)
 
         if self.cfg.train.mask_loss and not torch.any(valid_y):

@@ -2,7 +2,7 @@ project: GMM-1  # For WandB
 seed: null  # Whether fix the running seed to remove randomness
 
 raw_data:  # HDTTS data pipeline settings
-  name: la_block_t  # dataset_failureMode
+  name: la_normal  # dataset_failureMode
   mode:  # Part of missing data algo. Merged with configs/mode
     seed: 207  # 9101112
     min_seq: 12  # 1 hour
@@ -28,7 +28,7 @@ dataset:
 
 train:
   batch_size: 16  # Total graph mini-batch size
-  epochs: 100  # Maximal number of epochs
+  epochs: 1  # Maximal number of epochs
 
   mask_loss: True  # If this is True, imputed values are ignored when computing prediction loss (independent of metrics, see `logging` below)
 
