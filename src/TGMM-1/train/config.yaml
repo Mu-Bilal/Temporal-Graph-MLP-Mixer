@@ -5,18 +5,18 @@ logfile: null  # Custom log file name
 
 dataset:
   name: METRLA
-  max_len: 1
-  train_size: 1
-  val_size: 0
-  horizon: 36
-  window: 72
-  stride: 1
-  delay: 0
+  max_len: null  # Maximum number of samples
+  train_size: 1  # Ratio of whole set to use for training
+  val_size: 0  # Ratio of whole set to use for validation. test_size = 1 - (train_size+val_size)
+  horizon: 36  # Number of time steps to predict
+  window: 72  # Number of time steps in the past to use for prediction
+  stride: 1  # Number of time steps to skip between each sample
+  delay: 0  # Number of time steps to delay the prediction
   num_workers: 8  # Additional num of worker for data loading
   EngRADchannel: 0
 
 train:
-  batch_size: 1  # Total graph mini-batch size
+  batch_size: 32  # Total graph mini-batch size
   epochs: 50  # Maximal number of epochs
   lr: 3e-4  # Base learning rate
   lr_patience: 20  # number of steps before reduce learning rate
